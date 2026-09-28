@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Orbit-Disk Installer
-# curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/orbit-disk/main/install.sh | bash
+# curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
 # ==============================================================================
 
 set -e
 
 INSTALL_DIR="${HOME}/.local/bin"
-REPO_URL="https://github.com/mushfiqnabiaz/orbit-disk.git"
+REPO_URL="https://github.com/mushfiqnabiaz/Orbit-Disk.git"
 CLONE_DIR="${HOME}/.orbit-disk"
 
 echo "🛰️  Installing Orbit-Disk..."

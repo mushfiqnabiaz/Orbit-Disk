@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mushfiqnabiaz/orbit-disk/releases"><img src="https://img.shields.io/badge/release-v1.1.0-cyan.svg?style=for-the-badge&logo=github" alt="Release"></a>
+  <a href="https://github.com/mushfiqnabiaz/Orbit-Disk/releases"><img src="https://img.shields.io/badge/release-v1.1.0-cyan.svg?style=for-the-badge&logo=github" alt="Release"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-black.svg?style=for-the-badge&logo=apple" alt="macOS">
   <img src="https://img.shields.io/badge/shell-zsh%20%7C%20bash-4EAA25.svg?style=for-the-badge&logo=gnu-bash&logoColor=white" alt="Shell">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=for-the-badge" alt="License: MIT"></a>
@@ -76,7 +76,7 @@ When docked, Orbit-Disk routes heavy directories to your external drive. When un
 Install Orbit-Disk with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/orbit-disk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
 ```
 
 Reload your terminal:

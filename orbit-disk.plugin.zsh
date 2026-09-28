@@ -1,6 +1,6 @@
 # ==============================================================================
 # orbit-disk.plugin.zsh - Satellite Storage Offloader for Zsh / Oh My Zsh (v1.1.0)
-# https://github.com/mushfiqnabiaz/orbit-disk
+# https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 
 _orbit_disk_get_target() {

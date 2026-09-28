@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Orbit-Disk - Satellite Storage & Cache Offloader for macOS Developers
-# https://github.com/mushfiqnabiaz/orbit-disk
+# https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 
 set -e
