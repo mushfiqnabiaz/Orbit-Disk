@@ -1,0 +1,50 @@
+# Example On-Demand Database Stack for Orbit-Disk
+# Place this file in <your-external-drive>/dev-dbs/docker-compose.yml
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dev-postgres
+    restart: "no"
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: devdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  mysql:
+    image: mysql:8.0
+    container_name: dev-mysql
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: devdb
+      MYSQL_USER: dev
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+
+  mongodb:
+    image: mongo:7
+    container_name: dev-mongo
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dev
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./data/mongo:/data/db
+
+  redis:
+    image: redis:7-alpine
+    container_name: dev-redis
+    restart: "no"
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data

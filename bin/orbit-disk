@@ -1,0 +1,377 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Orbit-Disk - Satellite Storage & Cache Offloader for macOS Developers
+# https://github.com/mushfiqnabiaz/orbit-disk
+# ==============================================================================
+
+set -e
+
+CONFIG_FILE="${HOME}/.orbit-disk.conf"
+LEGACY_CONF="${HOME}/.devdrive.conf"
+
+# Backward compatibility with legacy conf
+if [ ! -f "$CONFIG_FILE" ] && [ -f "$LEGACY_CONF" ]; then
+    CONFIG_FILE="$LEGACY_CONF"
+fi
+
+# Default configuration
+ORBIT_PATH="${ORBIT_PATH:-auto}"
+
+# Default feature toggles
+OFFLOAD_XDG_CACHE="${OFFLOAD_XDG_CACHE:-true}"
+OFFLOAD_HOMEBREW="${OFFLOAD_HOMEBREW:-true}"
+OFFLOAD_NPM="${OFFLOAD_NPM:-true}"
+OFFLOAD_PNPM="${OFFLOAD_PNPM:-true}"
+OFFLOAD_BUN="${OFFLOAD_BUN:-true}"
+OFFLOAD_ANDROID="${OFFLOAD_ANDROID:-true}"
+OFFLOAD_GRADLE="${OFFLOAD_GRADLE:-true}"
+OFFLOAD_GO="${OFFLOAD_GO:-true}"
+OFFLOAD_CARGO="${OFFLOAD_CARGO:-true}"
+OFFLOAD_PLAYWRIGHT="${OFFLOAD_PLAYWRIGHT:-true}"
+OFFLOAD_AI_MODELS="${OFFLOAD_AI_MODELS:-true}"
+
+# Load user configuration if present
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
+
+# Detect external drive if set to "auto"
+get_drive_path() {
+    if [ "$ORBIT_PATH" != "auto" ] && [ -n "$ORBIT_PATH" ] && [ -d "$ORBIT_PATH" ]; then
+        echo "$ORBIT_PATH"
+        return 0
+    fi
+
+    # Auto-detect mounted external volumes in /Volumes
+    for vol in /Volumes/*; do
+        if [ "$vol" = "/Volumes/Macintosh HD" ] || [ "$vol" = "/Volumes/Macintosh HD - Data" ] || [ ! -d "$vol" ]; then
+            continue
+        fi
+        if [ -w "$vol" ] && [ ! -f "$vol/.read-only" ]; then
+            echo "$vol"
+            return 0
+        fi
+    done
+
+    echo ""
+    return 1
+}
+
+TARGET_DIR="$(get_drive_path || true)"
+
+show_banner() {
+    cat << "EOF"
+   ____       __    _ __        ____  _     __  
+  / __ \_____/ /_  (_) /_      / __ \(_)___/ /__
+ / / / / ___/ __ \/ / __/_____/ / / / / ___/ //_/
+/ /_/ / /  / /_/ / / /_/_____/ /_/ / (__  ) ,<   
+\____/_/  /_.___/_/\__/     /_____/_/____/_/|_|  
+                                                 
+   Satellite Storage for macOS Developers (v1.1.0)
+EOF
+}
+
+cmd_status() {
+    show_banner
+    echo ""
+    echo "⚙️  Configuration: $CONFIG_FILE"
+    
+    if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
+        echo "🟢 Drive Status:   DOCKED (In Orbit)"
+        echo "📍 Target Volume:  $TARGET_DIR"
+        
+        if command -v df >/dev/null 2>&1; then
+            echo "💾 Available:      $(df -h "$TARGET_DIR" | awk 'NR==2 {print $4 " (" $5 " used)"}')"
+        fi
+        
+        echo ""
+        echo "📦 Offloaded Cache Paths:"
+        [ "$OFFLOAD_XDG_CACHE" = "true" ] && echo "   • XDG Cache:     $TARGET_DIR/.cache"
+        [ "$OFFLOAD_HOMEBREW" = "true" ]  && echo "   • Homebrew:      $TARGET_DIR/Caches/Homebrew"
+        [ "$OFFLOAD_NPM" = "true" ]       && echo "   • NPM Cache:     $TARGET_DIR/.npm-cache"
+        [ "$OFFLOAD_PNPM" = "true" ]      && echo "   • PNPM Store:    $TARGET_DIR/.pnpm"
+        [ "$OFFLOAD_BUN" = "true" ]       && echo "   • Bun Cache:     $TARGET_DIR/.bun-cache"
+        [ "$OFFLOAD_ANDROID" = "true" ]   && echo "   • Android AVD:   $TARGET_DIR/.android/avd"
+        [ "$OFFLOAD_GRADLE" = "true" ]    && echo "   • Gradle Home:   $TARGET_DIR/.gradle"
+        [ "$OFFLOAD_GO" = "true" ]        && echo "   • Go Build:      $TARGET_DIR/Caches/go-build"
+        [ "$OFFLOAD_CARGO" = "true" ]     && echo "   • Rust Cargo:    $TARGET_DIR/.cargo"
+        [ "$OFFLOAD_PLAYWRIGHT" = "true" ]&& echo "   • Playwright:    $TARGET_DIR/Caches/ms-playwright"
+        [ "$OFFLOAD_AI_MODELS" = "true" ] && echo "   • AI (Ollama/HF):$TARGET_DIR/ollama/models & $TARGET_DIR/.cache/huggingface"
+        echo ""
+        echo "🛡️  Spotlight Guard: Active (caches, emulators & DBs excluded from search churn)"
+    else
+        echo "🟡 Drive Status:   UNDOCKED (Zero-break internal fallback mode active)"
+        echo "ℹ️  Caches are safely routed to internal drive until external drive is docked."
+    fi
+}
+
+cmd_init() {
+    show_banner
+    echo ""
+    echo "🔍 Scanning for connected external drives..."
+    echo ""
+    
+    local options=()
+    local i=1
+    
+    for vol in /Volumes/*; do
+        if [ "$vol" = "/Volumes/Macintosh HD" ] || [ "$vol" = "/Volumes/Macintosh HD - Data" ] || [ ! -d "$vol" ]; then
+            continue
+        fi
+        if [ -w "$vol" ]; then
+            options+=("$vol")
+            echo "   [$i] $vol ($(df -h "$vol" | awk 'NR==2 {print $4 " free"}'))"
+            i=$((i + 1))
+        fi
+    done
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo "❌ No writable external storage found in /Volumes."
+        echo "Please plug in an external drive and re-run 'orbit-disk init'."
+        exit 1
+    fi
+
+    echo ""
+    printf "Select target drive [1-%s] (Enter for [1]): " "${#options[@]}"
+    if [ -t 0 ]; then
+        read -r choice || choice=1
+    elif [ -c /dev/tty ]; then
+        read -r choice < /dev/tty 2>/dev/null || choice=1
+    else
+        choice=1
+    fi
+    choice="${choice:-1}"
+    
+    local selected_idx=$((choice - 1))
+    local chosen_drive="${options[$selected_idx]}"
+
+    if [ -z "$chosen_drive" ] || [ ! -d "$chosen_drive" ]; then
+        echo "❌ Invalid selection."
+        exit 1
+    fi
+
+    CONFIG_FILE="${HOME}/.orbit-disk.conf"
+    echo "Saving settings to $CONFIG_FILE..."
+    cat > "$CONFIG_FILE" << EOF
+# Orbit-Disk configuration (v1.1.0)
+ORBIT_PATH="$chosen_drive"
+
+# Web & Package Caches
+OFFLOAD_XDG_CACHE=true
+OFFLOAD_HOMEBREW=true
+OFFLOAD_NPM=true
+OFFLOAD_PNPM=true
+OFFLOAD_BUN=true
+
+# Mobile & Android
+OFFLOAD_ANDROID=true
+OFFLOAD_GRADLE=true
+
+# Language Runtimes & Testing
+OFFLOAD_GO=true
+OFFLOAD_CARGO=true
+OFFLOAD_PLAYWRIGHT=true
+
+# Local AI Models (Ollama, HuggingFace)
+OFFLOAD_AI_MODELS=true
+
+PREVENT_SPOTLIGHT_INDEXING=true
+EOF
+
+    # Prepare directories on target drive
+    mkdir -p "$chosen_drive"/{.cache,.npm-cache,.pnpm,.bun-cache,.android/avd,.gradle,.cargo,Caches/Homebrew,Caches/go-build,Caches/ms-playwright,ollama/models,Projects,Applications}
+    touch "$chosen_drive/.cache/.metadata_never_index" 2>/dev/null || true
+    touch "$chosen_drive/.android/.metadata_never_index" 2>/dev/null || true
+    touch "$chosen_drive/.gradle/.metadata_never_index" 2>/dev/null || true
+
+    echo "✅ Successfully docked Orbit-Disk to: $chosen_drive"
+    echo "💡 Run 'source ~/.zshrc' to apply."
+}
+
+cmd_sweep() {
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "⚠️  External drive not connected. Cannot sweep caches."
+        exit 1
+    fi
+
+    echo "🧹 Sweeping internal fallback caches into orbit ($TARGET_DIR)..."
+    python3 -c "
+import os, shutil
+
+def get_size(path):
+    if os.path.isfile(path) or os.path.islink(path):
+        try: return os.path.getsize(path)
+        except: return 0
+    total = 0
+    for root, dirs, files in os.walk(path):
+        for f in files:
+            fp = os.path.join(root, f)
+            try: total += os.path.getsize(fp)
+            except: pass
+    return total
+
+def fmt_size(b):
+    for u in ['B', 'KB', 'MB', 'GB']:
+        if b < 1024.0: return f'{b:.1f} {u}'
+        b /= 1024.0
+    return f'{b:.1f} TB'
+
+src = os.path.expanduser('~/.cache')
+dst = os.path.join('$TARGET_DIR', '.cache')
+moved = []
+
+if os.path.exists(src) and os.path.exists(dst):
+    for f in sorted(os.listdir(src)):
+        if f.startswith('.'): continue
+        s = os.path.join(src, f)
+        d = os.path.join(dst, f)
+        try:
+            sz = get_size(s)
+            if os.path.isdir(s):
+                shutil.copytree(s, d, dirs_exist_ok=True)
+                shutil.rmtree(s)
+                moved.append((f, sz, 'folder'))
+            elif os.path.isfile(s):
+                shutil.copy2(s, d)
+                os.remove(s)
+                moved.append((f, sz, 'file'))
+        except Exception:
+            pass
+
+pnpm_local = os.path.expanduser('~/.pnpm-store')
+if os.path.exists(pnpm_local):
+    try:
+        sz = get_size(pnpm_local)
+        shutil.rmtree(pnpm_local)
+        moved.append(('.pnpm-store', sz, 'store'))
+    except Exception:
+        pass
+
+if moved:
+    print('📦 Shifted the following caches from internal drive to external SSD:')
+    for name, size, kind in moved:
+        print(f'   • {name} ({fmt_size(size)})')
+    print(f'✅ Successfully swept {len(moved)} cache item(s)!')
+else:
+    print('✨ Internal drive is already clean. Nothing to sweep.')
+"
+}
+
+cmd_install_app() {
+    local app="$1"
+    if [ -z "$app" ]; then
+        echo "Usage: orbit-disk install-app <cask-name>"
+        exit 1
+    fi
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "⚠️  External drive not connected."
+        exit 1
+    fi
+
+    echo "📦 Installing $app to $TARGET_DIR via Homebrew..."
+    brew install --cask --appdir="$TARGET_DIR" "$app"
+    
+    echo "🔗 Auto-linking to /Applications..."
+    python3 -c "
+import os
+target = '$TARGET_DIR'
+for f in os.listdir(target):
+    if f.endswith('.app'):
+        src = os.path.join(target, f)
+        dst = os.path.join('/Applications', f)
+        if not os.path.exists(dst):
+            os.symlink(src, dst)
+            print(f'✅ Linked {f} into /Applications')
+"
+}
+
+cmd_install_dmg() {
+    local dmg="$1"
+    if [ ! -f "$dmg" ]; then
+        echo "❌ File not found: $dmg"
+        exit 1
+    fi
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "⚠️  External drive not connected."
+        exit 1
+    fi
+
+    echo "📦 Mounting $dmg..."
+    local mount_point
+    mount_point=$(hdiutil attach "$dmg" -nobrowse -readonly | grep -E "/Volumes/" | awk '{print $NF}')
+    if [ -z "$mount_point" ]; then
+        echo "❌ Failed to mount DMG."
+        exit 1
+    fi
+
+    echo "🚀 Copying app to $TARGET_DIR..."
+    cp -a "$mount_point"/*.app "$TARGET_DIR/" 2>/dev/null || true
+    echo "⏏️ Ejecting $mount_point..."
+    hdiutil detach "$mount_point" -quiet
+    rm -f "$dmg"
+
+    echo "🔗 Auto-linking to /Applications..."
+    python3 -c "
+import os
+target = '$TARGET_DIR'
+for f in os.listdir(target):
+    if f.endswith('.app'):
+        src = os.path.join(target, f)
+        dst = os.path.join('/Applications', f)
+        if not os.path.exists(dst):
+            os.symlink(src, dst)
+            print(f'✅ Linked {f} into /Applications')
+"
+    echo "✅ Successfully installed and linked!"
+}
+
+cmd_clean_next() {
+    echo "🧹 Removing all .next build caches in $(pwd)..."
+    find . -name '.next' -type d -prune -exec rm -rf {} +
+    echo "✅ Cleaned all .next build caches."
+}
+
+cmd_clean_modules() {
+    echo "🧹 Removing all node_modules in $(pwd)..."
+    find . -name 'node_modules' -type d -prune -exec rm -rf {} +
+    echo "✅ Cleaned all node_modules."
+}
+
+show_help() {
+    show_banner
+    cat << EOF
+
+Usage: orbit-disk <command> [arguments] (or: orbit <command>)
+
+Commands:
+  status             Show drive docking status and active cache offloading
+  init               Interactively detect and dock external drive
+  sweep              Sweep internal fallback caches into orbit (external drive)
+  install-app <app>  Install a Homebrew cask to external drive & link to /Applications
+  install-dmg <file> Install a downloaded DMG to external drive & link to /Applications
+  clean-next         Clean all .next build folders in current project tree
+  clean-modules      Clean all node_modules folders in current project tree
+  help               Show this help message
+
+Options:
+  --version          Display version
+EOF
+}
+
+case "$1" in
+    status)         cmd_status ;;
+    init)           cmd_init ;;
+    sweep|sync)     cmd_sweep ;;
+    install-app)    shift; cmd_install_app "$@" ;;
+    install-dmg)    shift; cmd_install_dmg "$@" ;;
+    clean-next)     cmd_clean_next ;;
+    clean-modules)  cmd_clean_modules ;;
+    --version|-v)   echo "orbit-disk v1.1.0" ;;
+    help|--help|-h|"") show_help ;;
+    *)
+        echo "Unknown command: $1"
+        echo "Run 'orbit-disk help' for usage."
+        exit 1
+        ;;
+esac
