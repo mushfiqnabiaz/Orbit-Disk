@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Orbit-Disk Logo" width="200" style="border-radius: 20px;">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/orbit-logo-white.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/orbit-logo-dark.png">
+    <img alt="Orbit-Disk Logo" src="assets/orbit-logo-white.png" width="220">
+  </picture>
 </p>
 
 <h1 align="center">Orbit-Disk 🛰️</h1>
