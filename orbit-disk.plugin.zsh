@@ -94,4 +94,40 @@ export PATH="$PNPM_HOME:$PATH"
 # Quick Shortcuts
 alias orbit-sweep="orbit-disk sweep"
 alias orbit-status="orbit-disk status"
+alias orbit-update="orbit-disk update"
 alias orbit="orbit-disk"
+
+# Non-blocking update check (runs in background once per 24 hours)
+_orbit_check_update() {
+    local stamp_file="${HOME}/.orbit-disk-check"
+    local alert_file="${HOME}/.orbit-disk-update-alert"
+    local now
+    now=$(date +%s 2>/dev/null || echo 0)
+
+    # Show alert if a newer version was detected
+    if [ -f "$alert_file" ]; then
+        local remote_v
+        remote_v=$(cat "$alert_file" 2>/dev/null)
+        if [ -n "$remote_v" ]; then
+            printf "\033[0;36m🛰️  Orbit-Disk update available (%s)!\033[0m Run \033[1m'orbit update'\033[0m to upgrade.\n" "$remote_v"
+        fi
+        return 0
+    fi
+
+    local last_check=0
+    [ -f "$stamp_file" ] && last_check=$(cat "$stamp_file" 2>/dev/null || echo 0)
+
+    # Check once every 24 hours (86400 seconds)
+    if [ $((now - last_check)) -gt 86400 ]; then
+        echo "$now" > "$stamp_file" 2>/dev/null || true
+        (
+            local latest
+            latest=$(curl -fsSL --max-time 2 "https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/bin/orbit-disk" 2>/dev/null | grep '^ORBIT_VERSION=' | cut -d'"' -f2)
+            if [ -n "$latest" ] && [ "$latest" != "1.1.0" ]; then
+                echo "v$latest" > "$alert_file" 2>/dev/null || true
+            fi
+        ) &! 2>/dev/null || true
+    fi
+}
+
+_orbit_check_update

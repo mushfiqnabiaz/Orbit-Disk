@@ -44,8 +44,12 @@ if [ -f "$ZSHRC" ] && ! grep -q "orbit-disk.plugin.zsh" "$ZSHRC"; then
     echo "✅ Added Orbit-Disk hook to $ZSHRC"
 fi
 
-# 4. Initialize configuration
-"$INSTALL_DIR/orbit-disk" init
+# 4. Initialize configuration if not already set
+if [ ! -f "${HOME}/.orbit-disk.conf" ] && [ ! -f "${HOME}/.devdrive.conf" ]; then
+    "$INSTALL_DIR/orbit-disk" init
+else
+    echo "⚙️ Existing configuration found at ~/.orbit-disk.conf (retained)."
+fi
 
 echo ""
 echo "🎉 Orbit-Disk has been successfully installed!"

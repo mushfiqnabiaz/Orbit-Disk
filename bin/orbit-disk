@@ -6,6 +6,7 @@
 
 set -e
 
+ORBIT_VERSION="1.1.0"
 CONFIG_FILE="${HOME}/.orbit-disk.conf"
 LEGACY_CONF="${HOME}/.devdrive.conf"
 
@@ -338,6 +339,45 @@ cmd_clean_modules() {
     echo "✅ Cleaned all node_modules."
 }
 
+cmd_update() {
+    echo "🛰️ Checking for Orbit-Disk updates from GitHub..."
+    local raw_base="https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main"
+    local install_dir="${HOME}/.local/bin"
+    local clone_dir="${HOME}/.orbit-disk"
+    local plugin_dest="${HOME}/.orbit-disk.plugin.zsh"
+    local alert_file="${HOME}/.orbit-disk-update-alert"
+
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    if curl -fsSL "${raw_base}/bin/orbit-disk" -o "${tmp_dir}/orbit-disk" && \
+       curl -fsSL "${raw_base}/orbit-disk.plugin.zsh" -o "${tmp_dir}/orbit-disk.plugin.zsh"; then
+        chmod +x "${tmp_dir}/orbit-disk"
+        local new_ver
+        new_ver="$("${tmp_dir}/orbit-disk" --version 2>/dev/null || echo "orbit-disk latest")"
+
+        # Atomically install
+        mkdir -p "$install_dir"
+        mv "${tmp_dir}/orbit-disk" "${install_dir}/orbit-disk"
+        ln -sf "${install_dir}/orbit-disk" "${install_dir}/orbit"
+        cp "${tmp_dir}/orbit-disk.plugin.zsh" "$plugin_dest"
+
+        # If git clone dir exists, sync it too
+        if [ -d "$clone_dir/.git" ]; then
+            (cd "$clone_dir" && git pull --quiet origin main 2>/dev/null || true)
+        fi
+
+        rm -f "$alert_file"
+        echo ""
+        echo "🎉 Successfully updated to ${new_ver}!"
+        echo "👉 Run 'source ~/.zshrc' to apply shell changes to this session."
+    else
+        echo "❌ Update failed: could not connect to GitHub repository."
+        return 1
+    fi
+}
+
 show_help() {
     show_banner
     cat << EOF
@@ -348,6 +388,7 @@ Commands:
   status             Show drive docking status and active cache offloading
   init               Interactively detect and dock external drive
   sweep              Sweep internal fallback caches into orbit (external drive)
+  update             Update Orbit-Disk to the latest release from GitHub
   install-app <app>  Install a Homebrew cask to external drive & link to /Applications
   install-dmg <file> Install a downloaded DMG to external drive & link to /Applications
   clean-next         Clean all .next build folders in current project tree
@@ -360,15 +401,16 @@ EOF
 }
 
 case "$1" in
-    status)         cmd_status ;;
-    init)           cmd_init ;;
-    sweep|sync)     cmd_sweep ;;
-    install-app)    shift; cmd_install_app "$@" ;;
-    install-dmg)    shift; cmd_install_dmg "$@" ;;
-    clean-next)     cmd_clean_next ;;
-    clean-modules)  cmd_clean_modules ;;
-    --version|-v)   echo "orbit-disk v1.1.0" ;;
-    help|--help|-h|"") show_help ;;
+    status)             cmd_status ;;
+    init)               cmd_init ;;
+    sweep|sync)         cmd_sweep ;;
+    update|upgrade)     cmd_update ;;
+    install-app)        shift; cmd_install_app "$@" ;;
+    install-dmg)        shift; cmd_install_dmg "$@" ;;
+    clean-next)         cmd_clean_next ;;
+    clean-modules)      cmd_clean_modules ;;
+    --version|-v)       echo "orbit-disk v${ORBIT_VERSION}" ;;
+    help|--help|-h|"")  show_help ;;
     *)
         echo "Unknown command: $1"
         echo "Run 'orbit-disk help' for usage."

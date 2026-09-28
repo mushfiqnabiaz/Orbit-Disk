@@ -93,6 +93,7 @@ You can use either `orbit-disk` or the short alias `orbit`:
 ```bash
 orbit status             # Check satellite drive docking status & disk space
 orbit sweep              # Pull temporary internal fallback caches to external drive
+orbit update             # Upgrade Orbit-Disk to the latest release from GitHub
 orbit init               # Interactively detect & switch target external drives
 orbit install-app <cask> # Install a Homebrew app to external drive & link to /Applications
 orbit install-dmg <file> # Install a downloaded DMG to external drive & link to /Applications
