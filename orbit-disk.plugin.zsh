@@ -94,6 +94,9 @@ export PATH="$PNPM_HOME:$PATH"
 # Quick Shortcuts
 alias orbit-sweep="orbit-disk sweep"
 alias orbit-status="orbit-disk status"
+alias orbit-stats="orbit-disk stats"
+alias orbit-space="orbit-disk stats"
+alias orbit-doctor="orbit-disk doctor"
 alias orbit-update="orbit-disk update"
 alias orbit="orbit-disk"
 

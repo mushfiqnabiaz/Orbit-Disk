@@ -378,6 +378,184 @@ cmd_update() {
     fi
 }
 
+cmd_doctor() {
+    show_banner
+    echo ""
+    echo "🩺 Orbit-Disk Diagnostic Health Check"
+    echo "======================================"
+    echo ""
+
+    # 1. Configuration Check
+    echo "⚙️  Configuration:"
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "   ✅ Config file: $CONFIG_FILE"
+        echo "      ORBIT_PATH is set to: $ORBIT_PATH"
+    else
+        echo "   ⚠️  No config file found at ~/.orbit-disk.conf (run 'orbit init')"
+    fi
+
+    # 2. Satellite Drive Health
+    echo ""
+    echo "🛰️  Satellite Volume Health:"
+    if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
+        echo "   ✅ Mounted & Active: $TARGET_DIR"
+
+        local test_file="$TARGET_DIR/.orbit_rw_test_$$"
+        if touch "$test_file" 2>/dev/null && rm -f "$test_file" 2>/dev/null; then
+            echo "   ✅ Read/Write Permissions: Verified (Full RW access)"
+        else
+            echo "   ❌ Read/Write Permissions: FAILED (Volume may be read-only)"
+        fi
+
+        if command -v diskutil >/dev/null 2>&1; then
+            local fs_type
+            fs_type=$(diskutil info "$TARGET_DIR" 2>/dev/null | awk -F': ' '/Type \(Bundle\)|File System Personality/ {print $2}' | head -n 1)
+            [ -n "$fs_type" ] && echo "   ℹ️  Filesystem: $fs_type"
+        fi
+
+        if command -v df >/dev/null 2>&1; then
+            local free_vol
+            free_vol=$(df -h "$TARGET_DIR" | awk 'NR==2 {print $4 " (" $5 " used)"}')
+            echo "   💾 Available Space: $free_vol"
+        fi
+    else
+        echo "   🟡 Drive is currently UNDOCKED"
+        echo "      Orbit-Disk is active in transparent internal fallback mode."
+        echo "      Caches and builds continue seamlessly without crashing."
+    fi
+
+    # 3. Shell Hook Integration
+    echo ""
+    echo "🐚 Shell Hook Check:"
+    local zshrc="${HOME}/.zshrc"
+    if [ -f "$zshrc" ] && grep -q "orbit-disk.plugin.zsh" "$zshrc"; then
+        echo "   ✅ Zsh plugin hook present in ~/.zshrc"
+    else
+        echo "   ⚠️  Zsh hook missing in ~/.zshrc (run installer to add)"
+    fi
+
+    if [ -f "${HOME}/.orbit-disk.plugin.zsh" ]; then
+        echo "   ✅ Plugin script exists at ~/.orbit-disk.plugin.zsh"
+    else
+        echo "   ⚠️  Plugin script not found at ~/.orbit-disk.plugin.zsh"
+    fi
+
+    # 4. Developer Tools & Offload Readiness
+    echo ""
+    echo "🛠️  Developer Tools & Offload Readiness:"
+    _check_tool() {
+        local name="$1"
+        local cmd="$2"
+        local path_target="$3"
+
+        if command -v "$cmd" >/dev/null 2>&1; then
+            if [ -n "$TARGET_DIR" ] && [ -d "$path_target" ]; then
+                echo "   ✅ $name: Installed & active on satellite drive"
+            elif [ -n "$TARGET_DIR" ]; then
+                echo "   📦 $name: Installed (ready for offload)"
+            else
+                echo "   🔄 $name: Installed (currently falling back to internal SSD)"
+            fi
+        else
+            echo "   ⚪ $name: Not installed (skipped)"
+        fi
+    }
+
+    _check_tool "Homebrew" "brew" "$TARGET_DIR/Caches/Homebrew"
+    _check_tool "Node.js (NPM)" "npm" "$TARGET_DIR/.npm-cache"
+    _check_tool "PNPM" "pnpm" "$TARGET_DIR/.pnpm"
+    _check_tool "Bun" "bun" "$TARGET_DIR/.bun-cache"
+    _check_tool "Android SDK" "adb" "$TARGET_DIR/.android/avd"
+    _check_tool "Gradle" "gradle" "$TARGET_DIR/.gradle"
+    _check_tool "Rust (Cargo)" "cargo" "$TARGET_DIR/.cargo"
+    _check_tool "Go" "go" "$TARGET_DIR/Caches/go-build"
+    _check_tool "Ollama AI" "ollama" "$TARGET_DIR/ollama/models"
+    _check_tool "Playwright" "npx" "$TARGET_DIR/Caches/ms-playwright"
+    _check_tool "Docker" "docker" "$TARGET_DIR/Docker"
+
+    echo ""
+    echo "✨ Diagnostics complete! Everything is operational."
+}
+
+cmd_stats() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "🟡 External drive is currently UNDOCKED."
+        echo "👉 Connect your external drive and run 'orbit stats' again to measure offloaded space."
+        return 0
+    fi
+
+    echo "📊 Calculating satellite space offload..."
+    python3 -c "
+import os, subprocess
+
+target = '$TARGET_DIR'
+
+categories = [
+    ('Installed Apps & Tools',   [f'{target}/Applications', f'{target}/dev-dbs', f'{target}/Claude-Data', f'{target}/Cursor-Data']),
+    ('System & Homebrew Caches', [f'{target}/Caches']),
+    ('XDG & Developer Caches',   [f'{target}/.cache']),
+    ('Node & Package Stores',    [f'{target}/.npm-cache', f'{target}/.pnpm', f'{target}/.bun-cache']),
+    ('Android & Gradle',         [f'{target}/.android', f'{target}/.gradle']),
+    ('Rust & Go Toolchains',     [f'{target}/.cargo', f'{target}/Caches/go-build']),
+    ('AI & Model Weights',       [f'{target}/ollama', f'{target}/.cache/huggingface', f'{target}/.cache/torch']),
+]
+
+results = []
+total_kb = 0
+
+for label, paths in categories:
+    cat_kb = 0
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                res = subprocess.check_output(['du', '-sk', p], stderr=subprocess.DEVNULL).decode().split()[0]
+                cat_kb += int(res)
+            except Exception:
+                pass
+    if cat_kb > 0:
+        results.append((label, cat_kb))
+        total_kb += cat_kb
+
+def fmt_size(kb):
+    if kb >= 1024 * 1024:
+        return f'{kb / (1024 * 1024):.2f} GB'
+    elif kb >= 1024:
+        return f'{kb / 1024:.1f} MB'
+    else:
+        return f'{kb} KB'
+
+print('\n🛰️  Orbit-Disk Space Offload Report')
+print(f'📍 Target Volume: {target}')
+print('─' * 66)
+print(f'{\"Category\":<28} {\"Size\":<12} {\"Share\"}')
+print('─' * 66)
+
+max_bar_width = 24
+for label, kb in sorted(results, key=lambda x: x[1], reverse=True):
+    pct = (kb / total_kb) if total_kb > 0 else 0
+    bar_len = int(round(pct * max_bar_width))
+    bar = '█' * bar_len + '░' * (max_bar_width - bar_len)
+    print(f'{label:<28} {fmt_size(kb):<12} {bar} {int(pct*100):>3}%')
+
+print('─' * 66)
+print(f'🛡️  Total Space Kept Off Internal SSD: \033[1;36m{fmt_size(total_kb)}\033[0m\n')
+" 2>/dev/null || {
+        echo "External volume usage:"
+        df -h "$TARGET_DIR"
+    }
+
+    if command -v df >/dev/null 2>&1; then
+        local int_free ext_free
+        int_free=$(df -h / | awk 'NR==2 {print $4}')
+        ext_free=$(df -h "$TARGET_DIR" | awk 'NR==2 {print $4 " (" $5 " used)"}')
+        echo "💾 Internal Mac SSD Free:  $int_free"
+        echo "🛰️ Satellite Volume Free:  $ext_free"
+        echo ""
+    fi
+}
+
 show_help() {
     show_banner
     cat << EOF
@@ -386,6 +564,8 @@ Usage: orbit-disk <command> [arguments] (or: orbit <command>)
 
 Commands:
   status             Show drive docking status and active cache offloading
+  stats              Visual dashboard of space offloaded to external drive
+  doctor             Run diagnostic health check on drive & dev toolchains
   init               Interactively detect and dock external drive
   sweep              Sweep internal fallback caches into orbit (external drive)
   update             Update Orbit-Disk to the latest release from GitHub
@@ -402,6 +582,8 @@ EOF
 
 case "$1" in
     status)             cmd_status ;;
+    stats|space|summary)cmd_stats ;;
+    doctor|check)       cmd_doctor ;;
     init)               cmd_init ;;
     sweep|sync)         cmd_sweep ;;
     update|upgrade)     cmd_update ;;

@@ -96,6 +96,8 @@ You can use either `orbit-disk` or the short alias `orbit`:
 
 ```bash
 orbit status             # Check satellite drive docking status & disk space
+orbit stats              # Visual dashboard of space offloaded to external drive
+orbit doctor             # Run diagnostic health check on drive & dev toolchains
 orbit sweep              # Pull temporary internal fallback caches to external drive
 orbit update             # Upgrade Orbit-Disk to the latest release from GitHub
 orbit init               # Interactively detect & switch target external drives
@@ -104,6 +106,25 @@ orbit install-dmg <file> # Install a downloaded DMG to external drive & link to 
 orbit clean-next         # Recursively remove .next build artifacts in current directory
 orbit clean-modules      # Recursively remove node_modules in current directory
 orbit help               # Show help menu
+```
+
+### 📊 Space Offload Dashboard (`orbit stats`)
+
+```text
+🛰️  Orbit-Disk Space Offload Report
+📍 Target Volume: /Volumes/External
+──────────────────────────────────────────────────────────────────
+Category                     Size         Share
+──────────────────────────────────────────────────────────────────
+Installed Apps & Tools       14.72 GB     ████████████░░░░░░░░░░░░  48%
+System & Homebrew Caches     12.06 GB     ██████████░░░░░░░░░░░░░░  39%
+XDG & Developer Caches       2.78 GB      ██░░░░░░░░░░░░░░░░░░░░░░   9%
+Node & Package Stores        826.3 MB     █░░░░░░░░░░░░░░░░░░░░░░░   2%
+──────────────────────────────────────────────────────────────────
+🛡️  Total Space Kept Off Internal SSD: 30.37 GB
+
+💾 Internal Mac SSD Free:  113Gi
+🛰️ Satellite Volume Free:  156Gi (33% used)
 ```
 
 ---
