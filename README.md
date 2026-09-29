@@ -98,6 +98,8 @@ You can use either `orbit-disk` or the short alias `orbit`:
 orbit status             # Check satellite drive docking status & disk space
 orbit stats              # Visual dashboard of space offloaded to external drive
 orbit doctor             # Run diagnostic health check on drive & dev toolchains
+orbit xcode-offload      # Move Xcode DerivedData build artifacts to external SSD
+orbit docker-offload     # Move Docker Desktop & OrbStack virtual disk to external SSD
 orbit sweep              # Pull temporary internal fallback caches to external drive
 orbit update             # Upgrade Orbit-Disk to the latest release from GitHub
 orbit init               # Interactively detect & switch target external drives

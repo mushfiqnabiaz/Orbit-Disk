@@ -97,6 +97,8 @@ alias orbit-status="orbit-disk status"
 alias orbit-stats="orbit-disk stats"
 alias orbit-space="orbit-disk stats"
 alias orbit-doctor="orbit-disk doctor"
+alias orbit-xcode="orbit-disk xcode-offload"
+alias orbit-docker="orbit-disk docker-offload"
 alias orbit-update="orbit-disk update"
 alias orbit="orbit-disk"
 

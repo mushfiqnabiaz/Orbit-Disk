@@ -471,7 +471,26 @@ cmd_doctor() {
     _check_tool "Go" "go" "$TARGET_DIR/Caches/go-build"
     _check_tool "Ollama AI" "ollama" "$TARGET_DIR/ollama/models"
     _check_tool "Playwright" "npx" "$TARGET_DIR/Caches/ms-playwright"
-    _check_tool "Docker" "docker" "$TARGET_DIR/Docker"
+
+    # Xcode DerivedData check
+    if command -v xcodebuild >/dev/null 2>&1; then
+        local xcode_loc
+        xcode_loc=$(defaults read com.apple.dt.Xcode IDECustomDerivedDataLocation 2>/dev/null || echo "")
+        if [ -n "$xcode_loc" ] && [ -n "$TARGET_DIR" ] && [[ "$xcode_loc" == "$TARGET_DIR"* ]]; then
+            echo "   ✅ Xcode DerivedData: Offloaded to satellite drive ($xcode_loc)"
+        else
+            echo "   📦 Xcode: Installed (run 'orbit xcode-offload' to offload build artifacts)"
+        fi
+    fi
+
+    # Docker & Container check
+    if command -v docker >/dev/null 2>&1 || [ -d "$HOME/.orbstack" ]; then
+        if [ -L "$HOME/.orbstack/data" ] || [ -L "$HOME/Library/Containers/com.docker.docker/Data/vms/0/Docker.raw" ] || [ -L "$HOME/Library/Containers/com.docker.docker/Data/vms/0/disk.raw" ]; then
+            echo "   ✅ Container Storage: Offloaded to satellite drive"
+        else
+            echo "   📦 Containers (Docker/OrbStack): Installed (run 'orbit docker-offload' to offload VM disk)"
+        fi
+    fi
 
     echo ""
     echo "✨ Diagnostics complete! Everything is operational."
@@ -494,6 +513,8 @@ target = '$TARGET_DIR'
 
 categories = [
     ('Installed Apps & Tools',   [f'{target}/Applications', f'{target}/dev-dbs', f'{target}/Claude-Data', f'{target}/Cursor-Data']),
+    ('Docker & Container Disks', [f'{target}/Docker', f'{target}/OrbStack', f'{target}/OrbStackData']),
+    ('Xcode & Simulators',       [f'{target}/Xcode', f'{target}/Developer']),
     ('System & Homebrew Caches', [f'{target}/Caches']),
     ('XDG & Developer Caches',   [f'{target}/.cache']),
     ('Node & Package Stores',    [f'{target}/.npm-cache', f'{target}/.pnpm', f'{target}/.bun-cache']),
@@ -556,6 +577,121 @@ print(f'🛡️  Total Space Kept Off Internal SSD: \033[1;36m{fmt_size(total_kb
     fi
 }
 
+cmd_xcode_offload() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "🔨 Configuring Xcode DerivedData Offload..."
+    if pgrep -x "Xcode" >/dev/null 2>&1; then
+        echo "⚠️  Xcode is currently running. Please save your work and quit Xcode before continuing."
+        read -r -p "Press Enter once Xcode is closed (or Ctrl+C to cancel)..."
+    fi
+
+    local target_derived="$TARGET_DIR/Xcode/DerivedData"
+    local local_derived="${HOME}/Library/Developer/Xcode/DerivedData"
+    mkdir -p "$target_derived"
+    touch "$TARGET_DIR/Xcode/.metadata_never_index" 2>/dev/null || true
+
+    if [ -d "$local_derived" ] && [ "$(ls -A "$local_derived" 2>/dev/null)" ]; then
+        local cur_size
+        cur_size=$(du -sh "$local_derived" 2>/dev/null | cut -f1)
+        echo "📦 Found local DerivedData build cache (${cur_size})."
+        echo "🚀 Migrating existing DerivedData into orbit..."
+        rsync -a --remove-source-files "$local_derived/" "$target_derived/" 2>/dev/null || true
+        rm -rf "$local_derived"
+    fi
+
+    defaults write com.apple.dt.Xcode IDECustomDerivedDataLocation "$target_derived"
+    echo "✅ Xcode DerivedData path successfully offloaded to: $target_derived"
+    echo "🛡️  Spotlight indexing excluded to keep disk build performance peak."
+    echo "💡 To restore to internal SSD at any time, run 'orbit xcode-restore'."
+}
+
+cmd_xcode_restore() {
+    echo "🔄 Restoring Xcode DerivedData to internal Mac SSD..."
+    defaults delete com.apple.dt.Xcode IDECustomDerivedDataLocation 2>/dev/null || true
+    echo "✅ Xcode DerivedData reset to default internal storage (~/Library/Developer/Xcode/DerivedData)."
+}
+
+cmd_docker_offload() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "🐳 Preparing Container & Docker Offload..."
+
+    # 1. OrbStack Support
+    if [ -d "${HOME}/.orbstack" ]; then
+        echo "Detected OrbStack installation."
+        if pgrep -f "OrbStack" >/dev/null 2>&1; then
+            echo "⚠️  OrbStack is currently running. Please quit OrbStack from menu bar first."
+            read -r -p "Press Enter once OrbStack is closed (or Ctrl+C to cancel)..."
+        fi
+
+        local orb_target="$TARGET_DIR/OrbStack/data"
+        local orb_local="${HOME}/.orbstack/data"
+        mkdir -p "$TARGET_DIR/OrbStack"
+        touch "$TARGET_DIR/OrbStack/.metadata_never_index" 2>/dev/null || true
+
+        if [ -L "$orb_local" ]; then
+            echo "ℹ️  OrbStack data is already symlinked to satellite drive: $(readlink "$orb_local")"
+        elif [ -d "$orb_local" ]; then
+            echo "📦 Moving OrbStack data ($(du -sh "$orb_local" 2>/dev/null | cut -f1)) to satellite drive..."
+            mv "$orb_local" "$orb_target"
+            ln -s "$orb_target" "$orb_local"
+            echo "✅ OrbStack data offloaded and symlinked successfully!"
+        fi
+    fi
+
+    # 2. Docker Desktop Support
+    local docker_vm_dir="${HOME}/Library/Containers/com.docker.docker/Data/vms/0"
+    if [ -d "$docker_vm_dir" ]; then
+        echo "Detected Docker Desktop VM."
+        if pgrep -f "Docker" >/dev/null 2>&1; then
+            echo "⚠️  Docker Desktop is currently running. Please quit Docker first."
+            read -r -p "Press Enter once Docker is closed (or Ctrl+C to cancel)..."
+        fi
+
+        local docker_target="$TARGET_DIR/Docker"
+        mkdir -p "$docker_target"
+        touch "$docker_target/.metadata_never_index" 2>/dev/null || true
+
+        for disk_name in "Docker.raw" "disk.raw" "Docker.qcow2"; do
+            local local_disk="$docker_vm_dir/$disk_name"
+            local data_sub="$docker_vm_dir/data/$disk_name"
+            for candidate in "$local_disk" "$data_sub"; do
+                if [ -f "$candidate" ] && [ ! -L "$candidate" ]; then
+                    echo "📦 Found Docker virtual disk: $candidate ($(du -sh "$candidate" 2>/dev/null | cut -f1))"
+                    echo "Moving to $docker_target/$disk_name..."
+                    mv "$candidate" "$docker_target/$disk_name"
+                    ln -s "$docker_target/$disk_name" "$candidate"
+                    echo "✅ Docker virtual disk offloaded and linked successfully!"
+                fi
+            done
+        done
+    fi
+
+    echo "🎉 Container offloading configured! Launch Docker or OrbStack normally."
+}
+
+cmd_docker_restore() {
+    echo "🔄 Restoring Docker / OrbStack back to internal SSD..."
+    local orb_target="$TARGET_DIR/OrbStack/data"
+    local orb_local="${HOME}/.orbstack/data"
+    if [ -L "$orb_local" ] && [ -d "$orb_target" ]; then
+        rm "$orb_local"
+        mv "$orb_target" "$orb_local"
+        echo "✅ OrbStack data restored to internal SSD."
+    fi
+}
+
 show_help() {
     show_banner
     cat << EOF
@@ -566,6 +702,10 @@ Commands:
   status             Show drive docking status and active cache offloading
   stats              Visual dashboard of space offloaded to external drive
   doctor             Run diagnostic health check on drive & dev toolchains
+  xcode-offload      Relocate Xcode DerivedData build artifacts to external drive
+  xcode-restore      Reset Xcode DerivedData back to internal Mac storage
+  docker-offload     Relocate Docker Desktop & OrbStack VM disk to external drive
+  docker-restore     Reset Docker / OrbStack virtual disk back to internal storage
   init               Interactively detect and dock external drive
   sweep              Sweep internal fallback caches into orbit (external drive)
   update             Update Orbit-Disk to the latest release from GitHub
@@ -584,6 +724,10 @@ case "$1" in
     status)             cmd_status ;;
     stats|space|summary)cmd_stats ;;
     doctor|check)       cmd_doctor ;;
+    xcode-offload)      cmd_xcode_offload ;;
+    xcode-restore)      cmd_xcode_restore ;;
+    docker-offload)     cmd_docker_offload ;;
+    docker-restore)     cmd_docker_restore ;;
     init)               cmd_init ;;
     sweep|sync)         cmd_sweep ;;
     update|upgrade)     cmd_update ;;
