@@ -23,6 +23,11 @@ if [ -f "$SCRIPT_DIR/bin/orbit-disk" ]; then
     ln -sf "$INSTALL_DIR/orbit-disk" "$INSTALL_DIR/orbit"
     chmod +x "$INSTALL_DIR/orbit-disk"
     cp "$SCRIPT_DIR/orbit-disk.plugin.zsh" "${HOME}/.orbit-disk.plugin.zsh"
+    if [ -d "${HOME}/.config/fish" ] || command -v fish >/dev/null 2>&1; then
+        mkdir -p "${HOME}/.config/fish/conf.d"
+        cp "$SCRIPT_DIR/orbit-disk.fish" "${HOME}/.config/fish/conf.d/orbit-disk.fish"
+        echo "🐟 Added Orbit-Disk plugin for Fish shell"
+    fi
 else
     # Fallback to remote git clone if running via curl pipe
     rm -rf "$CLONE_DIR"
@@ -31,6 +36,11 @@ else
     ln -sf "$INSTALL_DIR/orbit-disk" "$INSTALL_DIR/orbit"
     chmod +x "$INSTALL_DIR/orbit-disk"
     cp "$CLONE_DIR/orbit-disk.plugin.zsh" "${HOME}/.orbit-disk.plugin.zsh"
+    if [ -d "${HOME}/.config/fish" ] || command -v fish >/dev/null 2>&1; then
+        mkdir -p "${HOME}/.config/fish/conf.d"
+        cp "$CLONE_DIR/orbit-disk.fish" "${HOME}/.config/fish/conf.d/orbit-disk.fish"
+        echo "🐟 Added Orbit-Disk plugin for Fish shell"
+    fi
 fi
 
 # 3. Add to shell configuration

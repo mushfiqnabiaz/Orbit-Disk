@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test Orbit-Disk on macOS
+    runs-on: macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: |
+          bash -n bin/orbit-disk
+          bash -n install.sh
+          zsh -n orbit-disk.plugin.zsh
+
+      - name: Verify CLI executables & help
+        run: |
+          chmod +x bin/orbit-disk install.sh
+          ./bin/orbit-disk --version
+          ./bin/orbit-disk help
+          ./bin/orbit-disk status
+
+      - name: Run Diagnostics (Doctor)
+        run: |
+          ./bin/orbit-disk doctor
+
+      - name: Test Mock Satellite Drive
+        run: |
+          # Create a simulated external volume directory in /tmp
+          MOCK_DRIVE="/tmp/MockSatelliteSSD"
+          mkdir -p "$MOCK_DRIVE"
+          
+          # Configure orbit-disk to use mock drive
+          echo "ORBIT_PATH=\"$MOCK_DRIVE\"" > "${HOME}/.orbit-disk.conf"
+          
+          # Test status & stats on mocked drive
+          ./bin/orbit-disk status
+          ./bin/orbit-disk stats
+          ./bin/orbit-disk sweep
+
+      - name: Test 1-Line Installer
+        run: |
+          bash install.sh
+          # Verify installed binaries in ~/.local/bin
+          export PATH="${HOME}/.local/bin:$PATH"
+          orbit --version
+          orbit doctor

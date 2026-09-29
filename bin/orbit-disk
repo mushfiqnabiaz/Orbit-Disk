@@ -368,6 +368,11 @@ cmd_update() {
             (cd "$clone_dir" && git pull --quiet origin main 2>/dev/null || true)
         fi
 
+        # Sync fish plugin if fish is configured
+        if [ -d "${HOME}/.config/fish/conf.d" ]; then
+            curl -fsSL "${raw_base}/orbit-disk.fish" -o "${HOME}/.config/fish/conf.d/orbit-disk.fish" 2>/dev/null || true
+        fi
+
         rm -f "$alert_file"
         echo ""
         echo "🎉 Successfully updated to ${new_ver}!"

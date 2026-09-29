@@ -1,0 +1,45 @@
+name: 🐛 Bug Report
+description: File a bug report to help improve Orbit-Disk
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please provide as much detail as possible.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run 'orbit status'
+        2. Unplug external drive
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor-output
+    attributes:
+      label: Diagnostic Output (`orbit doctor`)
+      description: Please paste the full output of running `orbit doctor` in your terminal.
+      render: shell
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Info
+      description: macOS version and processor architecture.
+      placeholder: macOS 14.5 (Sonoma) on Apple Silicon M2
+    validations:
+      required: true

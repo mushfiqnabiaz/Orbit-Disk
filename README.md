@@ -15,8 +15,9 @@
 
 <p align="center">
   <a href="https://github.com/mushfiqnabiaz/Orbit-Disk/releases"><img src="https://img.shields.io/badge/release-v1.1.0-cyan.svg?style=for-the-badge&logo=github" alt="Release"></a>
+  <a href="https://github.com/mushfiqnabiaz/Orbit-Disk/actions/workflows/ci.yml"><img src="https://github.com/mushfiqnabiaz/Orbit-Disk/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-black.svg?style=for-the-badge&logo=apple" alt="macOS">
-  <img src="https://img.shields.io/badge/shell-zsh%20%7C%20bash-4EAA25.svg?style=for-the-badge&logo=gnu-bash&logoColor=white" alt="Shell">
+  <img src="https://img.shields.io/badge/shell-zsh%20%7C%20bash%20%7C%20fish-4EAA25.svg?style=for-the-badge&logo=gnu-bash&logoColor=white" alt="Shell">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=for-the-badge" alt="License: MIT"></a>
   <a href="https://www.buymeacoffee.com/mushfiqnabiaz"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
 </p>
