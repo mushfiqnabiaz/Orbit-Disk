@@ -6,7 +6,7 @@
 
 set -e
 
-ORBIT_VERSION="1.1.0"
+ORBIT_VERSION="1.1.1"
 CONFIG_FILE="${HOME}/.orbit-disk.conf"
 LEGACY_CONF="${HOME}/.devdrive.conf"
 
@@ -259,6 +259,48 @@ else:
 "
 }
 
+cmd_link_apps() {
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "⚠️  External drive not connected."
+        exit 1
+    fi
+
+    echo "🔗 Auto-linking applications from satellite drive to /Applications..."
+    python3 -c "
+import os
+
+target = '$TARGET_DIR'
+search_dirs = [target]
+apps_dir = os.path.join(target, 'Applications')
+if os.path.isdir(apps_dir):
+    search_dirs.append(apps_dir)
+
+count = 0
+for s_dir in search_dirs:
+    if not os.path.exists(s_dir):
+        continue
+    for f in sorted(os.listdir(s_dir)):
+        if f.endswith('.app'):
+            src = os.path.join(s_dir, f)
+            dst = os.path.join('/Applications', f)
+            # Remove stale/broken symlink if it points to nowhere
+            if os.path.islink(dst) and not os.path.exists(dst):
+                try:
+                    os.unlink(dst)
+                except Exception:
+                    pass
+            if not os.path.exists(dst):
+                try:
+                    os.symlink(src, dst)
+                    print(f'✅ Linked {f} into /Applications')
+                    count += 1
+                except Exception as e:
+                    print(f'⚠️  Could not link {f}: {e}')
+if count == 0:
+    print('ℹ️  All applications are already linked in /Applications.')
+"
+}
+
 cmd_install_app() {
     local app="$1"
     if [ -z "$app" ]; then
@@ -273,24 +315,15 @@ cmd_install_app() {
     echo "📦 Installing $app to $TARGET_DIR via Homebrew..."
     brew install --cask --appdir="$TARGET_DIR" "$app"
     
-    echo "🔗 Auto-linking to /Applications..."
-    python3 -c "
-import os
-target = '$TARGET_DIR'
-for f in os.listdir(target):
-    if f.endswith('.app'):
-        src = os.path.join(target, f)
-        dst = os.path.join('/Applications', f)
-        if not os.path.exists(dst):
-            os.symlink(src, dst)
-            print(f'✅ Linked {f} into /Applications')
-"
+    cmd_link_apps
+    echo "🎉 Successfully installed and linked $app!"
 }
 
 cmd_install_dmg() {
     local dmg="$1"
-    if [ ! -f "$dmg" ]; then
-        echo "❌ File not found: $dmg"
+    if [ -z "$dmg" ] || [ ! -f "$dmg" ]; then
+        echo "❌ File not found: ${dmg:-<unspecified>}"
+        echo "Usage: orbit-disk install-dmg <path-to-dmg>"
         exit 1
     fi
     if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
@@ -298,33 +331,60 @@ cmd_install_dmg() {
         exit 1
     fi
 
-    echo "📦 Mounting $dmg..."
+    echo "📦 Mounting $(basename "$dmg")..."
+    local mount_output
+    mount_output=$(hdiutil attach "$dmg" -nobrowse -readonly 2>&1)
+    
     local mount_point
-    mount_point=$(hdiutil attach "$dmg" -nobrowse -readonly | grep -E "/Volumes/" | awk '{print $NF}')
-    if [ -z "$mount_point" ]; then
-        echo "❌ Failed to mount DMG."
+    mount_point=$(echo "$mount_output" | sed -nE 's/.*(\/Volumes\/[^[:cntrl:]]*)/\1/p' | head -n 1 | sed 's/[[:space:]]*$//')
+
+    if [ -z "$mount_point" ] || [ ! -d "$mount_point" ]; then
+        echo "❌ Failed to mount DMG. Details:"
+        echo "$mount_output"
         exit 1
     fi
 
-    echo "🚀 Copying app to $TARGET_DIR..."
-    cp -a "$mount_point"/*.app "$TARGET_DIR/" 2>/dev/null || true
-    echo "⏏️ Ejecting $mount_point..."
-    hdiutil detach "$mount_point" -quiet
-    rm -f "$dmg"
+    echo "📍 Mounted at: $mount_point"
 
-    echo "🔗 Auto-linking to /Applications..."
-    python3 -c "
-import os
-target = '$TARGET_DIR'
-for f in os.listdir(target):
-    if f.endswith('.app'):
-        src = os.path.join(target, f)
-        dst = os.path.join('/Applications', f)
-        if not os.path.exists(dst):
-            os.symlink(src, dst)
-            print(f'✅ Linked {f} into /Applications')
-"
-    echo "✅ Successfully installed and linked!"
+    # Find .app bundles in the mounted volume
+    local apps=()
+    while IFS= read -r -d '' app_path; do
+        apps+=("$app_path")
+    done < <(find "$mount_point" -maxdepth 2 -name "*.app" -type d -print0)
+
+    if [ ${#apps[@]} -eq 0 ]; then
+        echo "❌ No .app bundle found in $mount_point."
+        echo "⏏️ Ejecting $mount_point..."
+        diskutil eject "$mount_point" 2>/dev/null || hdiutil detach "$mount_point" -force -quiet || true
+        exit 1
+    fi
+
+    local copied_count=0
+    for app_path in "${apps[@]}"; do
+        local app_name
+        app_name="$(basename "$app_path")"
+        echo "🚀 Copying $app_name to $TARGET_DIR..."
+        if cp -a "$app_path" "$TARGET_DIR/"; then
+            copied_count=$((copied_count + 1))
+            echo "✅ Successfully copied $app_name."
+        else
+            echo "❌ Failed to copy $app_name to $TARGET_DIR"
+        fi
+    done
+
+    echo "⏏️ Ejecting $mount_point..."
+    diskutil eject "$mount_point" 2>/dev/null || hdiutil detach "$mount_point" -force -quiet || true
+
+    if [ "$copied_count" -gt 0 ]; then
+        rm -f "$dmg"
+        echo "🗑️ Cleaned up DMG file: $(basename "$dmg")"
+    else
+        echo "⚠️  No applications were copied. Preserving DMG installer."
+        exit 1
+    fi
+
+    cmd_link_apps
+    echo "🎉 Successfully installed and linked!"
 }
 
 cmd_clean_next() {
@@ -716,6 +776,7 @@ Commands:
   update             Update Orbit-Disk to the latest release from GitHub
   install-app <app>  Install a Homebrew cask to external drive & link to /Applications
   install-dmg <file> Install a downloaded DMG to external drive & link to /Applications
+  link-apps          Scan external drive for .app bundles and link to /Applications
   clean-next         Clean all .next build folders in current project tree
   clean-modules      Clean all node_modules folders in current project tree
   help               Show this help message
@@ -738,6 +799,7 @@ case "$1" in
     update|upgrade)     cmd_update ;;
     install-app)        shift; cmd_install_app "$@" ;;
     install-dmg)        shift; cmd_install_dmg "$@" ;;
+    link-apps)          cmd_link_apps ;;
     clean-next)         cmd_clean_next ;;
     clean-modules)      cmd_clean_modules ;;
     --version|-v)       echo "orbit-disk v${ORBIT_VERSION}" ;;
