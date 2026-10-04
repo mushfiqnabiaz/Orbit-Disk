@@ -47,12 +47,23 @@ fi
 ZSHRC="${HOME}/.zshrc"
 SOURCE_LINE="[ -f \"${HOME}/.orbit-disk.plugin.zsh\" ] && source \"${HOME}/.orbit-disk.plugin.zsh\""
 
-if [ -f "$ZSHRC" ] && ! grep -q "orbit-disk.plugin.zsh" "$ZSHRC"; then
-    echo "" >> "$ZSHRC"
-    echo "# Orbit-Disk satellite cache offloader" >> "$ZSHRC"
-    echo "$SOURCE_LINE" >> "$ZSHRC"
-    echo "✅ Added Orbit-Disk hook to $ZSHRC"
+if [ -f "$ZSHRC" ]; then
+    if ! grep -q '\.local/bin' "$ZSHRC"; then
+        echo "" >> "$ZSHRC"
+        echo '# User binaries (Orbit-Disk CLI)' >> "$ZSHRC"
+        echo 'export PATH="${HOME}/.local/bin:$PATH"' >> "$ZSHRC"
+        echo "✅ Added ~/.local/bin to PATH in $ZSHRC"
+    fi
+    if ! grep -q "orbit-disk.plugin.zsh" "$ZSHRC"; then
+        echo "" >> "$ZSHRC"
+        echo "# Orbit-Disk satellite cache offloader" >> "$ZSHRC"
+        echo "$SOURCE_LINE" >> "$ZSHRC"
+        echo "✅ Added Orbit-Disk hook to $ZSHRC"
+    fi
 fi
+
+# Clean up any stale update alert
+rm -f "${HOME}/.orbit-disk-update-alert" 2>/dev/null || true
 
 # 4. Initialize configuration if not already set
 if [ ! -f "${HOME}/.orbit-disk.conf" ] && [ ! -f "${HOME}/.devdrive.conf" ]; then

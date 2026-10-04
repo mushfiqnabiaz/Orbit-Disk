@@ -89,18 +89,64 @@ else
     unset TORCH_HOME
 fi
 
+# Ensure ~/.local/bin is in PATH for Orbit-Disk CLI
+if [[ ":$PATH:" != *":${HOME}/.local/bin:"* ]]; then
+    export PATH="${HOME}/.local/bin:$PATH"
+fi
+
 export PATH="$PNPM_HOME:$PATH"
 
-# Quick Shortcuts
-alias orbit-sweep="orbit-disk sweep"
-alias orbit-status="orbit-disk status"
-alias orbit-stats="orbit-disk stats"
-alias orbit-space="orbit-disk stats"
-alias orbit-doctor="orbit-disk doctor"
-alias orbit-xcode="orbit-disk xcode-offload"
-alias orbit-docker="orbit-disk docker-offload"
-alias orbit-update="orbit-disk update"
-alias orbit="orbit-disk"
+# Resilient Orbit CLI Wrapper (Auto-locates binary, fixes PATH, or auto-installs on update)
+orbit() {
+    # 1. If orbit-disk is directly available in PATH
+    if command -v orbit-disk >/dev/null 2>&1; then
+        command orbit-disk "$@"
+        return $?
+    fi
+
+    # 2. Check standard locations
+    local candidate=""
+    for p in "${HOME}/.local/bin/orbit-disk" "/usr/local/bin/orbit-disk" "${_ORBIT_DISK_TARGET}/Projects/orbit-disk/bin/orbit-disk"; do
+        if [ -x "$p" ]; then
+            candidate="$p"
+            break
+        fi
+    done
+
+    if [ -n "$candidate" ]; then
+        local pdir
+        pdir="$(dirname "$candidate")"
+        [[ ":$PATH:" != *":${pdir}:"* ]] && export PATH="${pdir}:$PATH"
+        "$candidate" "$@"
+        return $?
+    fi
+
+    # 3. If binary is completely missing from this Mac
+    if [ "$1" = "update" ] || [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+        echo "🛰️  Orbit-Disk CLI binary is not installed on this Mac."
+        echo "📥 Downloading and installing latest release from GitHub..."
+        curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
+        export PATH="${HOME}/.local/bin:$PATH"
+        rm -f "${HOME}/.orbit-disk-update-alert" 2>/dev/null || true
+        return 0
+    fi
+
+    echo "❌ orbit-disk binary is not installed on this Mac (or not found in PATH)."
+    echo "👉 Run 'orbit update' (or: curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash) to install it."
+    return 127
+}
+
+# Aliases routing to the smart wrapper
+alias orbit-disk="orbit"
+alias orbit-update="orbit update"
+alias orbit-sweep="orbit sweep"
+alias orbit-status="orbit status"
+alias orbit-stats="orbit stats"
+alias orbit-space="orbit stats"
+alias orbit-doctor="orbit doctor"
+alias orbit-xcode="orbit xcode-offload"
+alias orbit-docker="orbit docker-offload"
+alias orbit-link="orbit link-apps"
 
 # Non-blocking update check (runs in background once per 24 hours)
 _orbit_check_update() {
@@ -109,14 +155,25 @@ _orbit_check_update() {
     local now
     now=$(date +%s 2>/dev/null || echo 0)
 
+    # Detect currently installed version
+    local current_v="1.1.1"
+    if command -v orbit-disk >/dev/null 2>&1; then
+        current_v=$(command orbit-disk --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//')
+    elif [ -x "${HOME}/.local/bin/orbit-disk" ]; then
+        current_v=$("${HOME}/.local/bin/orbit-disk" --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//')
+    fi
+
     # Show alert if a newer version was detected
     if [ -f "$alert_file" ]; then
         local remote_v
-        remote_v=$(cat "$alert_file" 2>/dev/null)
-        if [ -n "$remote_v" ]; then
-            printf "\033[0;36m🛰️  Orbit-Disk update available (%s)!\033[0m Run \033[1m'orbit update'\033[0m to upgrade.\n" "$remote_v"
+        remote_v=$(cat "$alert_file" 2>/dev/null | sed 's/^v//')
+        if [ -n "$remote_v" ] && [ "$remote_v" != "$current_v" ]; then
+            printf "\033[0;36m🛰️  Orbit-Disk update available (v%s)!\033[0m Run \033[1m'orbit update'\033[0m to upgrade.\n" "$remote_v"
+            return 0
+        else
+            # Stale alert file
+            rm -f "$alert_file" 2>/dev/null || true
         fi
-        return 0
     fi
 
     local last_check=0
@@ -127,8 +184,8 @@ _orbit_check_update() {
         echo "$now" > "$stamp_file" 2>/dev/null || true
         (
             local latest
-            latest=$(curl -fsSL --max-time 2 "https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/bin/orbit-disk" 2>/dev/null | grep '^ORBIT_VERSION=' | cut -d'"' -f2)
-            if [ -n "$latest" ] && [ "$latest" != "1.1.0" ]; then
+            latest=$(curl -fsSL --max-time 3 "https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/bin/orbit-disk" 2>/dev/null | grep '^ORBIT_VERSION=' | cut -d'"' -f2)
+            if [ -n "$latest" ] && [ "$latest" != "$current_v" ]; then
                 echo "v$latest" > "$alert_file" 2>/dev/null || true
             fi
         ) &! 2>/dev/null || true

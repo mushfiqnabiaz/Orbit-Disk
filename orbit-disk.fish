@@ -87,6 +87,10 @@ if test -n "$PNPM_HOME" -a -d "$PNPM_HOME"
     fish_add_path "$PNPM_HOME"
 end
 
+if test -d "$HOME/.local/bin"
+    fish_add_path "$HOME/.local/bin"
+end
+
 # Quick Shortcuts
 alias orbit-sweep="orbit-disk sweep"
 alias orbit-status="orbit-disk status"
