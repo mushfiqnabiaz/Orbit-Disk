@@ -1,5 +1,5 @@
 # ==============================================================================
-# orbit-disk.fish - Satellite Storage Offloader for Fish Shell (v1.2.0)
+# orbit-disk.fish - Satellite Storage Offloader for Fish Shell (v1.2.1)
 # https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 

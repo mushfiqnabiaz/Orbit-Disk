@@ -6,7 +6,7 @@
 
 set -e
 
-ORBIT_VERSION="1.2.0"
+ORBIT_VERSION="1.2.1"
 CONFIG_FILE="${HOME}/.orbit-disk.conf"
 LEGACY_CONF="${HOME}/.devdrive.conf"
 

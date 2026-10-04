@@ -1,5 +1,5 @@
 # ==============================================================================
-# orbit-disk.plugin.zsh - Satellite Storage Offloader for Zsh / Oh My Zsh (v1.2.0)
+# orbit-disk.plugin.zsh - Satellite Storage Offloader for Zsh / Oh My Zsh (v1.2.1)
 # https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 
@@ -206,7 +206,7 @@ _orbit_check_update() {
     now=$(date +%s 2>/dev/null || echo 0)
 
     # Detect currently installed version
-    local current_v="1.2.0"
+    local current_v="1.2.1"
     if command -v orbit-disk >/dev/null 2>&1; then
         current_v=$(command orbit-disk --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//')
     elif [ -x "${HOME}/.local/bin/orbit-disk" ]; then
