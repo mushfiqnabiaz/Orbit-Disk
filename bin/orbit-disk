@@ -6,7 +6,7 @@
 
 set -e
 
-ORBIT_VERSION="1.1.1"
+ORBIT_VERSION="1.2.0"
 CONFIG_FILE="${HOME}/.orbit-disk.conf"
 LEGACY_CONF="${HOME}/.devdrive.conf"
 
@@ -62,14 +62,14 @@ get_drive_path() {
 TARGET_DIR="$(get_drive_path || true)"
 
 show_banner() {
-    cat << "EOF"
+    cat << EOF
    ____       __    _ __        ____  _     __  
   / __ \_____/ /_  (_) /_      / __ \(_)___/ /__
  / / / / ___/ __ \/ / __/_____/ / / / / ___/ //_/
 / /_/ / /  / /_/ / / /_/_____/ /_/ / (__  ) ,<   
 \____/_/  /_.___/_/\__/     /_____/_/____/_/|_|  
                                                  
-   Satellite Storage for macOS Developers (v1.1.0)
+   Satellite Storage for macOS Developers (v${ORBIT_VERSION})
 EOF
 }
 
@@ -181,10 +181,12 @@ PREVENT_SPOTLIGHT_INDEXING=true
 EOF
 
     # Prepare directories on target drive
-    mkdir -p "$chosen_drive"/{.cache,.npm-cache,.pnpm,.bun-cache,.android/avd,.gradle,.cargo,Caches/Homebrew,Caches/go-build,Caches/ms-playwright,ollama/models,Projects,Applications}
+    mkdir -p "$chosen_drive"/{.cache,.npm-cache,.pnpm,.bun-cache,.android/avd,.gradle,.cargo,Caches/Homebrew,Caches/go-build,Caches/ms-playwright,ollama/models,Projects,Applications,Xcode,Cursor-Data}
     touch "$chosen_drive/.cache/.metadata_never_index" 2>/dev/null || true
     touch "$chosen_drive/.android/.metadata_never_index" 2>/dev/null || true
     touch "$chosen_drive/.gradle/.metadata_never_index" 2>/dev/null || true
+    touch "$chosen_drive/Xcode/.metadata_never_index" 2>/dev/null || true
+    touch "$chosen_drive/Cursor-Data/.metadata_never_index" 2>/dev/null || true
 
     echo "✅ Successfully docked Orbit-Disk to: $chosen_drive"
     echo "💡 Run 'source ~/.zshrc' to apply."
@@ -639,21 +641,49 @@ cmd_doctor() {
     _check_tool "Node.js (NPM)" "npm" "$TARGET_DIR/.npm-cache"
     _check_tool "PNPM" "pnpm" "$TARGET_DIR/.pnpm"
     _check_tool "Bun" "bun" "$TARGET_DIR/.bun-cache"
-    _check_tool "Android SDK" "adb" "$TARGET_DIR/.android/avd"
-    _check_tool "Gradle" "gradle" "$TARGET_DIR/.gradle"
     _check_tool "Rust (Cargo)" "cargo" "$TARGET_DIR/.cargo"
     _check_tool "Go" "go" "$TARGET_DIR/Caches/go-build"
     _check_tool "Ollama AI" "ollama" "$TARGET_DIR/ollama/models"
     _check_tool "Playwright" "npx" "$TARGET_DIR/Caches/ms-playwright"
 
-    # Xcode DerivedData check
-    if command -v xcodebuild >/dev/null 2>&1; then
+    # Android Studio check
+    if [ -d "$HOME/.android" ] || [ -L "$HOME/.android" ]; then
+        if [ -L "$HOME/.android" ]; then
+            echo "   ✅ Android Studio: Offloaded to satellite drive (~/.android -> $(readlink "$HOME/.android"))"
+        else
+            echo "   📦 Android Studio: Installed on internal SSD (run 'orbit android-offload')"
+        fi
+    fi
+
+    # Gradle check
+    if [ -d "$HOME/.gradle" ] || [ -L "$HOME/.gradle" ]; then
+        if [ -L "$HOME/.gradle" ]; then
+            echo "   ✅ Gradle Caches & Wrapper: Offloaded to satellite drive (~/.gradle -> $(readlink "$HOME/.gradle"))"
+        else
+            echo "   📦 Gradle: Installed on internal SSD (run 'orbit gradle-offload')"
+        fi
+    fi
+
+    # Cursor Editor check
+    if [ -d "$HOME/.cursor" ] || [ -d "$HOME/Library/Application Support/Cursor" ] || [ -L "$HOME/.cursor" ]; then
+        if [ -L "$HOME/.cursor" ] || [ -L "$HOME/Library/Application Support/Cursor" ]; then
+            echo "   ✅ Cursor Editor: Offloaded to satellite drive"
+        else
+            echo "   📦 Cursor Editor: Installed on internal SSD (run 'orbit cursor-offload')"
+        fi
+    fi
+
+    # Xcode & Simulator check
+    if command -v xcodebuild >/dev/null 2>&1 || [ -d "$HOME/Library/Developer" ]; then
         local xcode_loc
         xcode_loc=$(defaults read com.apple.dt.Xcode IDECustomDerivedDataLocation 2>/dev/null || echo "")
         if [ -n "$xcode_loc" ] && [ -n "$TARGET_DIR" ] && [[ "$xcode_loc" == "$TARGET_DIR"* ]]; then
             echo "   ✅ Xcode DerivedData: Offloaded to satellite drive ($xcode_loc)"
         else
-            echo "   📦 Xcode: Installed (run 'orbit xcode-offload' to offload build artifacts)"
+            echo "   📦 Xcode DerivedData: (run 'orbit xcode-offload')"
+        fi
+        if [ -L "$HOME/Library/Developer/CoreSimulator/Devices" ]; then
+            echo "   ✅ Xcode Simulators: Offloaded to satellite drive"
         fi
     fi
 
@@ -759,16 +789,22 @@ cmd_xcode_offload() {
         return 1
     fi
 
-    echo "🔨 Configuring Xcode DerivedData Offload..."
+    echo "🔨 Configuring Xcode, Simulators & Build Artifacts Offload..."
     if pgrep -x "Xcode" >/dev/null 2>&1; then
         echo "⚠️  Xcode is currently running. Please save your work and quit Xcode before continuing."
         read -r -p "Press Enter once Xcode is closed (or Ctrl+C to cancel)..."
     fi
 
+    # Terminate Simulator daemon if running
+    killall -9 com.apple.CoreSimulator.CoreSimulatorService 2>/dev/null || true
+
+    mkdir -p "$TARGET_DIR/Xcode"
+    touch "$TARGET_DIR/Xcode/.metadata_never_index" 2>/dev/null || true
+
+    # 1. DerivedData
     local target_derived="$TARGET_DIR/Xcode/DerivedData"
     local local_derived="${HOME}/Library/Developer/Xcode/DerivedData"
     mkdir -p "$target_derived"
-    touch "$TARGET_DIR/Xcode/.metadata_never_index" 2>/dev/null || true
 
     if [ -d "$local_derived" ] && [ "$(ls -A "$local_derived" 2>/dev/null)" ]; then
         local cur_size
@@ -780,15 +816,283 @@ cmd_xcode_offload() {
     fi
 
     defaults write com.apple.dt.Xcode IDECustomDerivedDataLocation "$target_derived"
-    echo "✅ Xcode DerivedData path successfully offloaded to: $target_derived"
+    echo "✅ Xcode DerivedData path offloaded to: $target_derived"
+
+    # 2. CoreSimulator Devices (~16+ GB)
+    local local_sim="${HOME}/Library/Developer/CoreSimulator/Devices"
+    local target_sim="$TARGET_DIR/Xcode/CoreSimulator/Devices"
+    mkdir -p "$TARGET_DIR/Xcode/CoreSimulator"
+
+    if [ -L "$local_sim" ]; then
+        echo "ℹ️  CoreSimulator Devices is already symlinked to: $(readlink "$local_sim")"
+    elif [ -d "$local_sim" ]; then
+        local sim_size
+        sim_size=$(du -sh "$local_sim" 2>/dev/null | cut -f1)
+        echo "📱 Found local Simulator devices (${sim_size})."
+        echo "🚀 Offloading Simulator devices to satellite drive..."
+        mkdir -p "$target_sim"
+        rsync -a "$local_sim/" "$target_sim/" && rm -rf "$local_sim"
+        ln -s "$target_sim" "$local_sim"
+        echo "✅ Simulator devices offloaded and symlinked successfully!"
+    fi
+
+    # 3. iOS DeviceSupport (~6 GB symbols for physically debugged iPhones/iPads)
+    local local_devsup="${HOME}/Library/Developer/Xcode/iOS DeviceSupport"
+    local target_devsup="$TARGET_DIR/Xcode/iOS DeviceSupport"
+
+    if [ -L "$local_devsup" ]; then
+        echo "ℹ️  iOS DeviceSupport is already symlinked to: $(readlink "$local_devsup")"
+    elif [ -d "$local_devsup" ]; then
+        local devsup_size
+        devsup_size=$(du -sh "$local_devsup" 2>/dev/null | cut -f1)
+        echo "📱 Found iOS DeviceSupport symbols (${devsup_size})."
+        echo "🚀 Offloading iOS DeviceSupport to satellite drive..."
+        mkdir -p "$target_devsup"
+        rsync -a "$local_devsup/" "$target_devsup/" && rm -rf "$local_devsup"
+        ln -s "$target_devsup" "$local_devsup"
+        echo "✅ iOS DeviceSupport offloaded and symlinked successfully!"
+    fi
+
+    # 4. Clean Xcode Git source control caches
+    local xcode_git_cache="${HOME}/Library/Caches/com.apple.dt.Xcode.sourcecontrol.Git"
+    if [ -d "$xcode_git_cache" ]; then
+        rm -rf "$xcode_git_cache"
+        echo "🧹 Cleaned Xcode Git source control cache."
+    fi
+
     echo "🛡️  Spotlight indexing excluded to keep disk build performance peak."
     echo "💡 To restore to internal SSD at any time, run 'orbit xcode-restore'."
 }
 
 cmd_xcode_restore() {
-    echo "🔄 Restoring Xcode DerivedData to internal Mac SSD..."
+    echo "🔄 Restoring Xcode settings and caches to internal Mac SSD..."
     defaults delete com.apple.dt.Xcode IDECustomDerivedDataLocation 2>/dev/null || true
     echo "✅ Xcode DerivedData reset to default internal storage (~/Library/Developer/Xcode/DerivedData)."
+
+    local local_sim="${HOME}/Library/Developer/CoreSimulator/Devices"
+    local target_sim="$TARGET_DIR/Xcode/CoreSimulator/Devices"
+    if [ -L "$local_sim" ]; then
+        rm "$local_sim"
+        if [ -d "$target_sim" ]; then
+            echo "📦 Restoring Simulators to internal SSD..."
+            mkdir -p "$(dirname "$local_sim")"
+            rsync -a "$target_sim/" "$local_sim/"
+            echo "✅ CoreSimulator Devices restored to internal SSD."
+        fi
+    fi
+
+    local local_devsup="${HOME}/Library/Developer/Xcode/iOS DeviceSupport"
+    local target_devsup="$TARGET_DIR/Xcode/iOS DeviceSupport"
+    if [ -L "$local_devsup" ]; then
+        rm "$local_devsup"
+        if [ -d "$target_devsup" ]; then
+            echo "📦 Restoring iOS DeviceSupport symbols to internal SSD..."
+            mkdir -p "$(dirname "$local_devsup")"
+            rsync -a "$target_devsup/" "$local_devsup/"
+            echo "✅ iOS DeviceSupport restored to internal SSD."
+        fi
+    fi
+}
+
+cmd_android_offload() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "🤖 Configuring Android Studio & Emulator Offload..."
+    if pgrep -f "emulator|Android Studio" >/dev/null 2>&1; then
+        echo "⚠️  Android Studio or Android Emulator is currently running."
+        echo "   Please quit Android Studio and close running emulators before continuing."
+        read -r -p "Press Enter once closed (or Ctrl+C to cancel)..."
+    fi
+
+    local local_android="${HOME}/.android"
+    local target_android="$TARGET_DIR/.android"
+    mkdir -p "$target_android"
+    touch "$target_android/.metadata_never_index" 2>/dev/null || true
+
+    if [ -L "$local_android" ]; then
+        echo "ℹ️  ~/.android is already symlinked to: $(readlink "$local_android")"
+    elif [ -d "$local_android" ]; then
+        local cur_size
+        cur_size=$(du -sh "$local_android" 2>/dev/null | cut -f1)
+        echo "📦 Found local Android directory (${cur_size})."
+        echo "🚀 Offloading ~/.android to satellite drive..."
+        rsync -a "$local_android/" "$target_android/" && rm -rf "$local_android"
+        ln -s "$target_android" "$local_android"
+        echo "✅ ~/.android offloaded and symlinked successfully!"
+    else
+        ln -s "$target_android" "$local_android"
+        echo "✅ ~/.android symlinked to $target_android."
+    fi
+
+    echo "🎉 Android Studio AVD emulators and build cache now run directly on satellite drive!"
+    echo "💡 To restore to internal SSD at any time, run 'orbit android-restore'."
+}
+
+cmd_android_restore() {
+    echo "🔄 Restoring Android Studio ~/.android to internal SSD..."
+    local local_android="${HOME}/.android"
+    local target_android="$TARGET_DIR/.android"
+    if [ -L "$local_android" ]; then
+        rm "$local_android"
+        if [ -d "$target_android" ]; then
+            echo "📦 Copying files back to internal SSD..."
+            rsync -a "$target_android/" "$local_android/"
+            echo "✅ ~/.android restored to internal SSD."
+        else
+            mkdir -p "$local_android"
+            echo "✅ Created clean ~/.android on internal SSD."
+        fi
+    else
+        echo "ℹ️  ~/.android is not currently offloaded as a symlink."
+    fi
+}
+
+cmd_gradle_offload() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "🐘 Configuring Gradle Cache & Wrapper Offload..."
+    # Stop running gradle daemons
+    command -v gradle >/dev/null 2>&1 && gradle --stop 2>/dev/null || true
+    pkill -f ".*GradleDaemon.*" 2>/dev/null || true
+
+    local local_gradle="${HOME}/.gradle"
+    local target_gradle="$TARGET_DIR/.gradle"
+    mkdir -p "$target_gradle"
+    touch "$target_gradle/.metadata_never_index" 2>/dev/null || true
+
+    if [ -L "$local_gradle" ]; then
+        echo "ℹ️  ~/.gradle is already symlinked to: $(readlink "$local_gradle")"
+    elif [ -d "$local_gradle" ]; then
+        local cur_size
+        cur_size=$(du -sh "$local_gradle" 2>/dev/null | cut -f1)
+        echo "📦 Found local Gradle directory (${cur_size})."
+        echo "🚀 Offloading ~/.gradle to satellite drive..."
+        rsync -a "$local_gradle/" "$target_gradle/" && rm -rf "$local_gradle"
+        ln -s "$target_gradle" "$local_gradle"
+        echo "✅ ~/.gradle offloaded and symlinked successfully!"
+    else
+        ln -s "$target_gradle" "$local_gradle"
+        echo "✅ ~/.gradle symlinked to $target_gradle."
+    fi
+
+    echo "🎉 Gradle caches (dependencies, jars) and wrapper distributions now offloaded!"
+    echo "💡 To restore to internal SSD at any time, run 'orbit gradle-restore'."
+}
+
+cmd_gradle_restore() {
+    echo "🔄 Restoring Gradle ~/.gradle to internal SSD..."
+    local local_gradle="${HOME}/.gradle"
+    local target_gradle="$TARGET_DIR/.gradle"
+    if [ -L "$local_gradle" ]; then
+        rm "$local_gradle"
+        if [ -d "$target_gradle" ]; then
+            echo "📦 Copying files back to internal SSD..."
+            rsync -a "$target_gradle/" "$local_gradle/"
+            echo "✅ ~/.gradle restored to internal SSD."
+        else
+            mkdir -p "$local_gradle"
+            echo "✅ Created clean ~/.gradle on internal SSD."
+        fi
+    else
+        echo "ℹ️  ~/.gradle is not currently offloaded as a symlink."
+    fi
+}
+
+cmd_cursor_offload() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "⚡ Configuring Cursor Editor Offload..."
+    if pgrep -f "Cursor" >/dev/null 2>&1; then
+        echo "⚠️  Cursor editor is currently running. Please save and quit Cursor first."
+        read -r -p "Press Enter once Cursor is closed (or Ctrl+C to cancel)..."
+    fi
+
+    local target_cursor="$TARGET_DIR/Cursor-Data"
+    mkdir -p "$target_cursor"
+    touch "$target_cursor/.metadata_never_index" 2>/dev/null || true
+
+    # 1. Clean disposable Electron caches first
+    local app_support="${HOME}/Library/Application Support/Cursor"
+    if [ -d "$app_support" ]; then
+        echo "🧹 Clearing disposable Electron caches (Cache, Code Cache, GPUCache)..."
+        rm -rf "$app_support/Cache" \
+               "$app_support/CachedData" \
+               "$app_support/Code Cache" \
+               "$app_support/GPUCache" \
+               "$app_support/Service Worker/CacheStorage" 2>/dev/null || true
+    fi
+
+    # 2. Offload ~/.cursor (extensions & configuration)
+    local local_cursor_home="${HOME}/.cursor"
+    local target_cursor_home="$target_cursor/.cursor"
+    if [ -L "$local_cursor_home" ]; then
+        echo "ℹ️  ~/.cursor is already symlinked to: $(readlink "$local_cursor_home")"
+    elif [ -d "$local_cursor_home" ]; then
+        local c_size
+        c_size=$(du -sh "$local_cursor_home" 2>/dev/null | cut -f1)
+        echo "📦 Found ~/.cursor (${c_size}). Offloading to satellite drive..."
+        mkdir -p "$target_cursor_home"
+        rsync -a "$local_cursor_home/" "$target_cursor_home/" && rm -rf "$local_cursor_home"
+        ln -s "$target_cursor_home" "$local_cursor_home"
+        echo "✅ ~/.cursor offloaded and symlinked successfully!"
+    fi
+
+    # 3. Offload ~/Library/Application Support/Cursor
+    local target_app_support="$target_cursor/Application Support/Cursor"
+    if [ -L "$app_support" ]; then
+        echo "ℹ️  Cursor Application Support is already symlinked to: $(readlink "$app_support")"
+    elif [ -d "$app_support" ]; then
+        local as_size
+        as_size=$(du -sh "$app_support" 2>/dev/null | cut -f1)
+        echo "📦 Found Cursor Application Support (${as_size}). Offloading..."
+        mkdir -p "$target_cursor/Application Support"
+        rsync -a "$app_support/" "$target_app_support/" && rm -rf "$app_support"
+        ln -s "$target_app_support" "$app_support"
+        echo "✅ Cursor Application Support offloaded and symlinked successfully!"
+    fi
+
+    echo "🎉 Cursor extensions, user configuration, and state now offloaded!"
+    echo "💡 To restore to internal SSD at any time, run 'orbit cursor-restore'."
+}
+
+cmd_cursor_restore() {
+    echo "🔄 Restoring Cursor editor data to internal SSD..."
+    local local_cursor_home="${HOME}/.cursor"
+    local target_cursor_home="$TARGET_DIR/Cursor-Data/.cursor"
+    if [ -L "$local_cursor_home" ]; then
+        rm "$local_cursor_home"
+        if [ -d "$target_cursor_home" ]; then
+            echo "📦 Restoring ~/.cursor..."
+            rsync -a "$target_cursor_home/" "$local_cursor_home/"
+            echo "✅ ~/.cursor restored to internal SSD."
+        fi
+    fi
+
+    local app_support="${HOME}/Library/Application Support/Cursor"
+    local target_app_support="$TARGET_DIR/Cursor-Data/Application Support/Cursor"
+    if [ -L "$app_support" ]; then
+        rm "$app_support"
+        if [ -d "$target_app_support" ]; then
+            echo "📦 Restoring Cursor Application Support..."
+            rsync -a "$target_app_support/" "$app_support/"
+            echo "✅ Cursor Application Support restored to internal SSD."
+        fi
+    fi
 }
 
 cmd_docker_offload() {
@@ -864,6 +1168,76 @@ cmd_docker_restore() {
         mv "$orb_target" "$orb_local"
         echo "✅ OrbStack data restored to internal SSD."
     fi
+
+    local docker_vm_dir="${HOME}/Library/Containers/com.docker.docker/Data/vms/0"
+    local docker_target="$TARGET_DIR/Docker"
+    if [ -d "$docker_vm_dir" ] && [ -d "$docker_target" ]; then
+        for disk_name in "Docker.raw" "disk.raw" "Docker.qcow2"; do
+            local cand="$docker_vm_dir/$disk_name"
+            if [ -L "$cand" ] && [ -f "$docker_target/$disk_name" ]; then
+                rm "$cand"
+                mv "$docker_target/$disk_name" "$cand"
+                echo "✅ Docker disk $disk_name restored to internal SSD."
+            fi
+        done
+    fi
+}
+
+cmd_offload_all() {
+    show_banner
+    echo ""
+    if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Satellite drive is not docked. Please connect external drive first."
+        return 1
+    fi
+
+    echo "🚀 Starting Full Satellite Offload Suite..."
+    echo "Target volume: $TARGET_DIR"
+    echo ""
+
+    # 1. Android Studio & Emulators
+    if [ -d "${HOME}/.android" ] && [ ! -L "${HOME}/.android" ]; then
+        echo "▶️  Step 1/6: Offloading Android Studio & Emulators..."
+        cmd_android_offload
+        echo ""
+    fi
+
+    # 2. Gradle
+    if [ -d "${HOME}/.gradle" ] && [ ! -L "${HOME}/.gradle" ]; then
+        echo "▶️  Step 2/6: Offloading Gradle Caches & Wrappers..."
+        cmd_gradle_offload
+        echo ""
+    fi
+
+    # 3. Xcode & Simulators
+    if [ -d "${HOME}/Library/Developer" ]; then
+        echo "▶️  Step 3/6: Offloading Xcode Simulators & Build Artifacts..."
+        cmd_xcode_offload
+        echo ""
+    fi
+
+    # 4. Cursor Editor
+    if [ -d "${HOME}/.cursor" ] || [ -d "${HOME}/Library/Application Support/Cursor" ]; then
+        echo "▶️  Step 4/6: Offloading Cursor Editor Data..."
+        cmd_cursor_offload
+        echo ""
+    fi
+
+    # 5. Containers (Docker / OrbStack)
+    if [ -d "${HOME}/.orbstack" ] || [ -d "${HOME}/Library/Containers/com.docker.docker" ]; then
+        echo "▶️  Step 5/6: Offloading Containers & VM Disks..."
+        cmd_docker_offload
+        echo ""
+    fi
+
+    # 6. Global Cache Sweep
+    echo "▶️  Step 6/6: Sweeping remaining build caches..."
+    cmd_sweep
+    echo ""
+
+    # Final Visual Dashboard
+    echo "🎉 Complete offload finished! Here is your satellite storage breakdown:"
+    cmd_stats
 }
 
 show_help() {
@@ -872,17 +1246,28 @@ show_help() {
 
 Usage: orbit-disk <command> [arguments] (or: orbit <command>)
 
-Commands:
+Offload Commands (Relocate massive caches to external drive):
+  offload-all        One-command master suite: offload Xcode, Simulators, Android, Gradle, Cursor & Docker
+  android-offload    Relocate Android Studio & AVD emulators (~/.android) to external drive
+  android-restore    Reset Android Studio ~/.android back to internal Mac storage
+  gradle-offload     Relocate Gradle caches & wrappers (~/.gradle) to external drive
+  gradle-restore     Reset Gradle ~/.gradle back to internal Mac storage
+  xcode-offload      Relocate Xcode DerivedData, CoreSimulator Devices & iOS DeviceSupport
+  xcode-restore      Reset Xcode settings, Simulators and DerivedData back to internal Mac storage
+  cursor-offload     Relocate Cursor editor extensions & Application Support data to external drive
+  cursor-restore     Reset Cursor editor data back to internal Mac storage
+  docker-offload     Relocate Docker Desktop & OrbStack VM disk to external drive
+  docker-restore     Reset Docker / OrbStack virtual disk back to internal storage
+
+Monitoring & Management:
   status             Show drive docking status and active cache offloading
   stats              Visual dashboard of space offloaded to external drive
   doctor             Run diagnostic health check on drive & dev toolchains
-  xcode-offload      Relocate Xcode DerivedData build artifacts to external drive
-  xcode-restore      Reset Xcode DerivedData back to internal Mac storage
-  docker-offload     Relocate Docker Desktop & OrbStack VM disk to external drive
-  docker-restore     Reset Docker / OrbStack virtual disk back to internal storage
   init               Interactively detect and dock external drive
   sweep              Sweep internal fallback caches into orbit (external drive)
   update             Update Orbit-Disk to the latest release from GitHub
+
+App Store & Cleaners:
   install-app <app>  Install a Homebrew cask to external drive & link to /Applications
   install-dmg <file> Install a downloaded DMG to external drive & link to /Applications
   link-apps          Scan external drive for .app bundles and link to /Applications
@@ -899,9 +1284,16 @@ case "$1" in
     status)             cmd_status ;;
     stats|space|summary)cmd_stats ;;
     doctor|check)       cmd_doctor ;;
-    xcode-offload)      cmd_xcode_offload ;;
+    offload-all|offload)cmd_offload_all ;;
+    android-offload|android) cmd_android_offload ;;
+    android-restore)    cmd_android_restore ;;
+    gradle-offload|gradle)   cmd_gradle_offload ;;
+    gradle-restore)     cmd_gradle_restore ;;
+    xcode-offload|xcode)     cmd_xcode_offload ;;
     xcode-restore)      cmd_xcode_restore ;;
-    docker-offload)     cmd_docker_offload ;;
+    cursor-offload|cursor)   cmd_cursor_offload ;;
+    cursor-restore)     cmd_cursor_restore ;;
+    docker-offload|docker)   cmd_docker_offload ;;
     docker-restore)     cmd_docker_restore ;;
     init)               cmd_init ;;
     sweep|sync)         cmd_sweep ;;

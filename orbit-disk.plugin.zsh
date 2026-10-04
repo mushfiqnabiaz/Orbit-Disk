@@ -1,5 +1,5 @@
 # ==============================================================================
-# orbit-disk.plugin.zsh - Satellite Storage Offloader for Zsh / Oh My Zsh (v1.1.0)
+# orbit-disk.plugin.zsh - Satellite Storage Offloader for Zsh / Oh My Zsh (v1.2.0)
 # https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 
@@ -181,13 +181,18 @@ function orbit-update {
 }
 
 # Shortcuts routing to the smart wrapper
+alias orbit-offload="orbit offload-all"
+alias orbit-offload-all="orbit offload-all"
+alias orbit-android="orbit android-offload"
+alias orbit-gradle="orbit gradle-offload"
+alias orbit-cursor="orbit cursor-offload"
+alias orbit-xcode="orbit xcode-offload"
+alias orbit-docker="orbit docker-offload"
 alias orbit-sweep="orbit sweep"
 alias orbit-status="orbit status"
 alias orbit-stats="orbit stats"
 alias orbit-space="orbit stats"
 alias orbit-doctor="orbit doctor"
-alias orbit-xcode="orbit xcode-offload"
-alias orbit-docker="orbit docker-offload"
 alias orbit-link="orbit link-apps"
 
 # Non-blocking update check (runs in background once per 24 hours)
@@ -198,7 +203,7 @@ _orbit_check_update() {
     now=$(date +%s 2>/dev/null || echo 0)
 
     # Detect currently installed version
-    local current_v="1.1.1"
+    local current_v="1.2.0"
     if command -v orbit-disk >/dev/null 2>&1; then
         current_v=$(command orbit-disk --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//')
     elif [ -x "${HOME}/.local/bin/orbit-disk" ]; then

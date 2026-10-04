@@ -93,16 +93,33 @@ curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/insta
 You can use either `orbit-disk` or the short alias `orbit`:
 
 ```bash
-orbit status             # Check satellite drive docking status & disk space
+# Complete Offload Suite
+orbit offload-all        # One command to offload Xcode, Simulators, Android, Gradle, Cursor & Docker
+orbit android-offload    # Relocate Android Studio & AVD emulators (~/.android) to external drive
+orbit gradle-offload     # Relocate Gradle caches & wrappers (~/.gradle) to external drive
+orbit xcode-offload      # Relocate Xcode DerivedData, CoreSimulator Devices & iOS DeviceSupport
+orbit cursor-offload     # Relocate Cursor editor extensions & Application Support to external drive
+orbit docker-offload     # Relocate Docker Desktop & OrbStack virtual disk to external drive
+
+# Restores (Safely move components back to internal SSD whenever needed)
+orbit android-restore    # Reset Android Studio ~/.android back to internal Mac storage
+orbit gradle-restore     # Reset Gradle ~/.gradle back to internal Mac storage
+orbit xcode-restore      # Reset Xcode Simulators & DerivedData back to internal Mac storage
+orbit cursor-restore     # Reset Cursor editor data back to internal Mac storage
+orbit docker-restore     # Reset Docker / OrbStack virtual disk back to internal storage
+
+# Monitoring & Maintenance
+orbit status             # Check satellite drive docking status & active environment
 orbit stats              # Visual dashboard of space offloaded to external drive
-orbit doctor             # Run diagnostic health check on drive & dev toolchains
-orbit xcode-offload      # Move Xcode DerivedData build artifacts to external SSD
-orbit docker-offload     # Move Docker Desktop & OrbStack virtual disk to external SSD
-orbit sweep              # Pull temporary internal fallback caches to external drive
+orbit doctor             # Diagnostic health check on drive & dev toolchain symlinks
+orbit sweep              # Pull temporary internal fallback caches into orbit
 orbit update             # Upgrade Orbit-Disk to the latest release from GitHub
 orbit init               # Interactively detect & switch target external drives
+
+# App Store & Cleaners
 orbit install-app <cask> # Install a Homebrew app to external drive & link to /Applications
 orbit install-dmg <file> # Install a downloaded DMG to external drive & link to /Applications
+orbit link-apps          # Re-scan external drive for apps and configure Spotlight shims
 orbit clean-next         # Recursively remove .next build artifacts in current directory
 orbit clean-modules      # Recursively remove node_modules in current directory
 orbit help               # Show help menu

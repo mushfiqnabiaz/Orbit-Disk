@@ -1,5 +1,5 @@
 # ==============================================================================
-# orbit-disk.fish - Satellite Storage Offloader for Fish Shell (v1.1.0)
+# orbit-disk.fish - Satellite Storage Offloader for Fish Shell (v1.2.0)
 # https://github.com/mushfiqnabiaz/Orbit-Disk
 # ==============================================================================
 
@@ -92,12 +92,17 @@ if test -d "$HOME/.local/bin"
 end
 
 # Quick Shortcuts
+alias orbit-offload="orbit-disk offload-all"
+alias orbit-offload-all="orbit-disk offload-all"
+alias orbit-android="orbit-disk android-offload"
+alias orbit-gradle="orbit-disk gradle-offload"
+alias orbit-cursor="orbit-disk cursor-offload"
+alias orbit-xcode="orbit-disk xcode-offload"
+alias orbit-docker="orbit-disk docker-offload"
 alias orbit-sweep="orbit-disk sweep"
 alias orbit-status="orbit-disk status"
 alias orbit-stats="orbit-disk stats"
 alias orbit-space="orbit-disk stats"
 alias orbit-doctor="orbit-disk doctor"
-alias orbit-xcode="orbit-disk xcode-offload"
-alias orbit-docker="orbit-disk docker-offload"
 alias orbit-update="orbit-disk update"
 alias orbit="orbit-disk"
