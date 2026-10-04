@@ -1240,6 +1240,23 @@ cmd_offload_all() {
     cmd_stats
 }
 
+cmd_rollback_all() {
+    show_banner
+    echo ""
+    echo "🔄 Rolling back all offloaded tools to internal Mac SSD..."
+    echo "This will safely move Xcode, Simulators, Android, Gradle, Cursor & Docker back to internal storage."
+    echo ""
+
+    cmd_android_restore
+    cmd_gradle_restore
+    cmd_xcode_restore
+    cmd_cursor_restore
+    cmd_docker_restore
+
+    echo ""
+    echo "🎉 Complete rollback finished! All tools are now restored to internal Mac storage."
+}
+
 show_help() {
     show_banner
     cat << EOF
@@ -1249,14 +1266,17 @@ Usage: orbit-disk <command> [arguments] (or: orbit <command>)
 Offload Commands (Relocate massive caches to external drive):
   offload-all        One-command master suite: offload Xcode, Simulators, Android, Gradle, Cursor & Docker
   android-offload    Relocate Android Studio & AVD emulators (~/.android) to external drive
-  android-restore    Reset Android Studio ~/.android back to internal Mac storage
   gradle-offload     Relocate Gradle caches & wrappers (~/.gradle) to external drive
-  gradle-restore     Reset Gradle ~/.gradle back to internal Mac storage
   xcode-offload      Relocate Xcode DerivedData, CoreSimulator Devices & iOS DeviceSupport
-  xcode-restore      Reset Xcode settings, Simulators and DerivedData back to internal Mac storage
   cursor-offload     Relocate Cursor editor extensions & Application Support data to external drive
-  cursor-restore     Reset Cursor editor data back to internal Mac storage
   docker-offload     Relocate Docker Desktop & OrbStack VM disk to external drive
+
+Rollback & Restores (Safely restore tools back to internal Mac SSD):
+  rollback           One-command rollback: restore ALL offloaded tools back to internal Mac SSD
+  android-restore    Reset Android Studio ~/.android back to internal Mac storage
+  gradle-restore     Reset Gradle ~/.gradle back to internal Mac storage
+  xcode-restore      Reset Xcode settings, Simulators and DerivedData back to internal Mac storage
+  cursor-restore     Reset Cursor editor data back to internal Mac storage
   docker-restore     Reset Docker / OrbStack virtual disk back to internal storage
 
 Monitoring & Management:
@@ -1285,6 +1305,7 @@ case "$1" in
     stats|space|summary)cmd_stats ;;
     doctor|check)       cmd_doctor ;;
     offload-all|offload)cmd_offload_all ;;
+    rollback|restore-all)cmd_rollback_all ;;
     android-offload|android) cmd_android_offload ;;
     android-restore)    cmd_android_restore ;;
     gradle-offload|gradle)   cmd_gradle_offload ;;
