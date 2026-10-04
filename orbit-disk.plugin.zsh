@@ -96,8 +96,38 @@ fi
 
 export PATH="$PNPM_HOME:$PATH"
 
-# Resilient Orbit CLI Wrapper (Auto-locates binary, fixes PATH, or auto-installs on update)
+# Resilient Orbit CLI Wrapper (Auto-locates binary, fixes PATH, and auto-reloads session on update)
 orbit() {
+    # If updating: run update AND automatically reload ~/.zshrc into the current terminal session!
+    if [ "$1" = "update" ] || [ "$1" = "upgrade" ]; then
+        local ret=0
+        if command -v orbit-disk >/dev/null 2>&1; then
+            command orbit-disk "$@"
+            ret=$?
+        elif [ -x "${HOME}/.local/bin/orbit-disk" ]; then
+            export PATH="${HOME}/.local/bin:$PATH"
+            "${HOME}/.local/bin/orbit-disk" "$@"
+            ret=$?
+        else
+            echo "🛰️  Orbit-Disk CLI binary is not installed on this Mac."
+            echo "📥 Downloading and installing latest release from GitHub..."
+            curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
+            ret=$?
+        fi
+
+        # Automatically re-source and refresh current shell session without user typing it!
+        export PATH="${HOME}/.local/bin:$PATH"
+        rm -f "${HOME}/.orbit-disk-update-alert" 2>/dev/null || true
+        if [ -f "${HOME}/.orbit-disk.plugin.zsh" ]; then
+            source "${HOME}/.orbit-disk.plugin.zsh" 2>/dev/null || true
+        fi
+        if [ -f "${HOME}/.zshrc" ]; then
+            source "${HOME}/.zshrc" 2>/dev/null || true
+        fi
+        echo "🔄 Automatically refreshed active shell session (~/.zshrc reloaded)!"
+        return $ret
+    fi
+
     # 1. If orbit-disk is directly available in PATH
     if command -v orbit-disk >/dev/null 2>&1; then
         command orbit-disk "$@"
@@ -122,12 +152,13 @@ orbit() {
     fi
 
     # 3. If binary is completely missing from this Mac
-    if [ "$1" = "update" ] || [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    if [ "$1" = "install" ]; then
         echo "🛰️  Orbit-Disk CLI binary is not installed on this Mac."
         echo "📥 Downloading and installing latest release from GitHub..."
         curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
         export PATH="${HOME}/.local/bin:$PATH"
         rm -f "${HOME}/.orbit-disk-update-alert" 2>/dev/null || true
+        [ -f "${HOME}/.zshrc" ] && source "${HOME}/.zshrc" 2>/dev/null || true
         return 0
     fi
 

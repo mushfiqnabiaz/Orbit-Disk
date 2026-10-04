@@ -78,16 +78,13 @@ When docked, Orbit-Disk routes heavy directories to your external drive. When un
 
 ## 🚀 Quickstart (1-Line Install)
 
-Install Orbit-Disk with a single command:
+Install Orbit-Disk with a single command (automatically detects shell, configures PATH, and reloads):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mushfiqnabiaz/Orbit-Disk/main/install.sh | bash && source ~/.zshrc
 ```
 
-Reload your terminal:
-```bash
-source ~/.zshrc
-```
+*(Or open a new terminal tab after running)*
 
 ---
 

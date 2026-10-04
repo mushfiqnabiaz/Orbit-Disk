@@ -43,23 +43,44 @@ else
     fi
 fi
 
-# 3. Add to shell configuration
-ZSHRC="${HOME}/.zshrc"
-SOURCE_LINE="[ -f \"${HOME}/.orbit-disk.plugin.zsh\" ] && source \"${HOME}/.orbit-disk.plugin.zsh\""
+# 3. Auto-detect shell profiles and configure PATH & hooks
+CURRENT_SHELL="$(basename "${SHELL:-zsh}")"
+DETECTED_PROFILES=()
+[ -f "${HOME}/.zshrc" ] && DETECTED_PROFILES+=("${HOME}/.zshrc")
+[ -f "${HOME}/.bashrc" ] && DETECTED_PROFILES+=("${HOME}/.bashrc")
+[ -f "${HOME}/.bash_profile" ] && DETECTED_PROFILES+=("${HOME}/.bash_profile")
 
-if [ -f "$ZSHRC" ]; then
-    if ! grep -q '\.local/bin' "$ZSHRC"; then
-        echo "" >> "$ZSHRC"
-        echo '# User binaries (Orbit-Disk CLI)' >> "$ZSHRC"
-        echo 'export PATH="${HOME}/.local/bin:$PATH"' >> "$ZSHRC"
-        echo "✅ Added ~/.local/bin to PATH in $ZSHRC"
+# If no profile exists yet, create default based on user shell
+if [ ${#DETECTED_PROFILES[@]} -eq 0 ]; then
+    if [[ "$CURRENT_SHELL" == *"zsh"* ]]; then
+        touch "${HOME}/.zshrc"
+        DETECTED_PROFILES+=("${HOME}/.zshrc")
+    else
+        touch "${HOME}/.bashrc"
+        DETECTED_PROFILES+=("${HOME}/.bashrc")
     fi
-    if ! grep -q "orbit-disk.plugin.zsh" "$ZSHRC"; then
-        echo "" >> "$ZSHRC"
-        echo "# Orbit-Disk satellite cache offloader" >> "$ZSHRC"
-        echo "$SOURCE_LINE" >> "$ZSHRC"
-        echo "✅ Added Orbit-Disk hook to $ZSHRC"
+fi
+
+for prof in "${DETECTED_PROFILES[@]}"; do
+    if ! grep -q '\.local/bin' "$prof" 2>/dev/null; then
+        echo "" >> "$prof"
+        echo '# User local binaries (Orbit-Disk CLI)' >> "$prof"
+        echo 'export PATH="${HOME}/.local/bin:$PATH"' >> "$prof"
+        echo "✅ Added ~/.local/bin to PATH in $(basename "$prof")"
     fi
+    if ! grep -q "orbit-disk.plugin.zsh" "$prof" 2>/dev/null; then
+        echo "" >> "$prof"
+        echo "# Orbit-Disk satellite cache offloader" >> "$prof"
+        echo "[ -f \"${HOME}/.orbit-disk.plugin.zsh\" ] && source \"${HOME}/.orbit-disk.plugin.zsh\"" >> "$prof"
+        echo "✅ Added Orbit-Disk hook to $(basename "$prof")"
+    fi
+done
+
+# If /usr/local/bin is writable, link system-wide for immediate availability
+if [ -w "/usr/local/bin" ]; then
+    ln -sf "$INSTALL_DIR/orbit-disk" "/usr/local/bin/orbit-disk" 2>/dev/null || true
+    ln -sf "$INSTALL_DIR/orbit-disk" "/usr/local/bin/orbit" 2>/dev/null || true
+    echo "🔗 Linked orbit to /usr/local/bin (instantly available system-wide)"
 fi
 
 # Clean up any stale update alert
@@ -72,6 +93,8 @@ else
     echo "⚙️ Existing configuration found at ~/.orbit-disk.conf (retained)."
 fi
 
+PRIMARY_RC="${DETECTED_PROFILES[0]:-${HOME}/.zshrc}"
+
 echo ""
-echo "🎉 Orbit-Disk has been successfully installed!"
-echo "👉 Run 'source ~/.zshrc' to apply immediately."
+echo "🎉 Orbit-Disk has been successfully installed and configured!"
+echo "👉 Run 'source $(basename "$PRIMARY_RC")' (or open a new terminal tab) to begin."
