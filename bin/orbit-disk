@@ -870,26 +870,42 @@ cmd_xcode_restore() {
     echo "✅ Xcode DerivedData reset to default internal storage (~/Library/Developer/Xcode/DerivedData)."
 
     local local_sim="${HOME}/Library/Developer/CoreSimulator/Devices"
-    local target_sim="$TARGET_DIR/Xcode/CoreSimulator/Devices"
     if [ -L "$local_sim" ]; then
-        rm "$local_sim"
+        local target_sim="$(readlink "$local_sim")"
+        [ -z "$target_sim" ] && target_sim="$TARGET_DIR/Xcode/CoreSimulator/Devices"
         if [ -d "$target_sim" ]; then
             echo "📦 Restoring Simulators to internal SSD..."
-            mkdir -p "$(dirname "$local_sim")"
-            rsync -a "$target_sim/" "$local_sim/"
-            echo "✅ CoreSimulator Devices restored to internal SSD."
+            local tmp_sim="${local_sim}.restoring_$$"
+            if rsync -a "$target_sim/" "$tmp_sim/"; then
+                rm "$local_sim"
+                mv "$tmp_sim" "$local_sim"
+                echo "✅ CoreSimulator Devices restored to internal SSD."
+            else
+                rm -rf "$tmp_sim"
+                echo "❌ Failed to copy Simulators back. Symlink preserved."
+            fi
+        else
+            echo "⚠️  Simulator target ($target_sim) not mounted/found. Please connect external drive."
         fi
     fi
 
     local local_devsup="${HOME}/Library/Developer/Xcode/iOS DeviceSupport"
-    local target_devsup="$TARGET_DIR/Xcode/iOS DeviceSupport"
     if [ -L "$local_devsup" ]; then
-        rm "$local_devsup"
+        local target_devsup="$(readlink "$local_devsup")"
+        [ -z "$target_devsup" ] && target_devsup="$TARGET_DIR/Xcode/iOS DeviceSupport"
         if [ -d "$target_devsup" ]; then
             echo "📦 Restoring iOS DeviceSupport symbols to internal SSD..."
-            mkdir -p "$(dirname "$local_devsup")"
-            rsync -a "$target_devsup/" "$local_devsup/"
-            echo "✅ iOS DeviceSupport restored to internal SSD."
+            local tmp_devsup="${local_devsup}.restoring_$$"
+            if rsync -a "$target_devsup/" "$tmp_devsup/"; then
+                rm "$local_devsup"
+                mv "$tmp_devsup" "$local_devsup"
+                echo "✅ iOS DeviceSupport restored to internal SSD."
+            else
+                rm -rf "$tmp_devsup"
+                echo "❌ Failed to copy iOS DeviceSupport back. Symlink preserved."
+            fi
+        else
+            echo "⚠️  iOS DeviceSupport target ($target_devsup) not mounted/found. Please connect external drive."
         fi
     fi
 }
@@ -936,19 +952,30 @@ cmd_android_offload() {
 cmd_android_restore() {
     echo "🔄 Restoring Android Studio ~/.android to internal SSD..."
     local local_android="${HOME}/.android"
-    local target_android="$TARGET_DIR/.android"
-    if [ -L "$local_android" ]; then
-        rm "$local_android"
-        if [ -d "$target_android" ]; then
-            echo "📦 Copying files back to internal SSD..."
-            rsync -a "$target_android/" "$local_android/"
-            echo "✅ ~/.android restored to internal SSD."
-        else
-            mkdir -p "$local_android"
-            echo "✅ Created clean ~/.android on internal SSD."
-        fi
-    else
+    if [ ! -L "$local_android" ]; then
         echo "ℹ️  ~/.android is not currently offloaded as a symlink."
+        return 0
+    fi
+
+    local target_android="$(readlink "$local_android")"
+    [ -z "$target_android" ] && target_android="$TARGET_DIR/.android"
+
+    if [ ! -d "$target_android" ]; then
+        echo "❌ Cannot restore ~/.android: Target data on external drive ($target_android) is not mounted/found."
+        echo "👉 Please connect your external drive first so data can be copied back."
+        return 1
+    fi
+
+    echo "📦 Copying files back from external drive to internal SSD..."
+    local tmp_backup="${HOME}/.android.restoring_$$"
+    if rsync -a "$target_android/" "$tmp_backup/"; then
+        rm "$local_android"
+        mv "$tmp_backup" "$local_android"
+        echo "✅ ~/.android successfully restored to internal SSD."
+    else
+        rm -rf "$tmp_backup"
+        echo "❌ Failed to copy files back. Symlink preserved."
+        return 1
     fi
 }
 
@@ -992,19 +1019,30 @@ cmd_gradle_offload() {
 cmd_gradle_restore() {
     echo "🔄 Restoring Gradle ~/.gradle to internal SSD..."
     local local_gradle="${HOME}/.gradle"
-    local target_gradle="$TARGET_DIR/.gradle"
-    if [ -L "$local_gradle" ]; then
-        rm "$local_gradle"
-        if [ -d "$target_gradle" ]; then
-            echo "📦 Copying files back to internal SSD..."
-            rsync -a "$target_gradle/" "$local_gradle/"
-            echo "✅ ~/.gradle restored to internal SSD."
-        else
-            mkdir -p "$local_gradle"
-            echo "✅ Created clean ~/.gradle on internal SSD."
-        fi
-    else
+    if [ ! -L "$local_gradle" ]; then
         echo "ℹ️  ~/.gradle is not currently offloaded as a symlink."
+        return 0
+    fi
+
+    local target_gradle="$(readlink "$local_gradle")"
+    [ -z "$target_gradle" ] && target_gradle="$TARGET_DIR/.gradle"
+
+    if [ ! -d "$target_gradle" ]; then
+        echo "❌ Cannot restore ~/.gradle: Target data on external drive ($target_gradle) is not mounted/found."
+        echo "👉 Please connect your external drive first so data can be copied back."
+        return 1
+    fi
+
+    echo "📦 Copying files back from external drive to internal SSD..."
+    local tmp_backup="${HOME}/.gradle.restoring_$$"
+    if rsync -a "$target_gradle/" "$tmp_backup/"; then
+        rm "$local_gradle"
+        mv "$tmp_backup" "$local_gradle"
+        echo "✅ ~/.gradle successfully restored to internal SSD."
+    else
+        rm -rf "$tmp_backup"
+        echo "❌ Failed to copy files back. Symlink preserved."
+        return 1
     fi
 }
 
@@ -1073,24 +1111,40 @@ cmd_cursor_offload() {
 cmd_cursor_restore() {
     echo "🔄 Restoring Cursor editor data to internal SSD..."
     local local_cursor_home="${HOME}/.cursor"
-    local target_cursor_home="$TARGET_DIR/Cursor-Data/.cursor"
     if [ -L "$local_cursor_home" ]; then
-        rm "$local_cursor_home"
+        local target_cursor_home="$(readlink "$local_cursor_home")"
+        [ -z "$target_cursor_home" ] && target_cursor_home="$TARGET_DIR/Cursor-Data/.cursor"
         if [ -d "$target_cursor_home" ]; then
             echo "📦 Restoring ~/.cursor..."
-            rsync -a "$target_cursor_home/" "$local_cursor_home/"
-            echo "✅ ~/.cursor restored to internal SSD."
+            local tmp_ch="${local_cursor_home}.restoring_$$"
+            if rsync -a "$target_cursor_home/" "$tmp_ch/"; then
+                rm "$local_cursor_home"
+                mv "$tmp_ch" "$local_cursor_home"
+                echo "✅ ~/.cursor restored to internal SSD."
+            else
+                rm -rf "$tmp_ch"
+            fi
+        else
+            echo "⚠️  ~/.cursor target ($target_cursor_home) not mounted/found."
         fi
     fi
 
     local app_support="${HOME}/Library/Application Support/Cursor"
-    local target_app_support="$TARGET_DIR/Cursor-Data/Application Support/Cursor"
     if [ -L "$app_support" ]; then
-        rm "$app_support"
+        local target_app_support="$(readlink "$app_support")"
+        [ -z "$target_app_support" ] && target_app_support="$TARGET_DIR/Cursor-Data/Application Support/Cursor"
         if [ -d "$target_app_support" ]; then
             echo "📦 Restoring Cursor Application Support..."
-            rsync -a "$target_app_support/" "$app_support/"
-            echo "✅ Cursor Application Support restored to internal SSD."
+            local tmp_as="${app_support}.restoring_$$"
+            if rsync -a "$target_app_support/" "$tmp_as/"; then
+                rm "$app_support"
+                mv "$tmp_as" "$app_support"
+                echo "✅ Cursor Application Support restored to internal SSD."
+            else
+                rm -rf "$tmp_as"
+            fi
+        else
+            echo "⚠️  Cursor Application Support target ($target_app_support) not mounted/found."
         fi
     fi
 }

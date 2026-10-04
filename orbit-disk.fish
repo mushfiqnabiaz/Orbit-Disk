@@ -95,6 +95,8 @@ end
 alias orbit-offload="orbit-disk offload-all"
 alias orbit-offload-all="orbit-disk offload-all"
 alias orbit-rollback="orbit-disk rollback"
+alias orbit-restore="orbit-disk restore-all"
+alias orbit-restore-all="orbit-disk restore-all"
 alias orbit-android="orbit-disk android-offload"
 alias orbit-gradle="orbit-disk gradle-offload"
 alias orbit-cursor="orbit-disk cursor-offload"

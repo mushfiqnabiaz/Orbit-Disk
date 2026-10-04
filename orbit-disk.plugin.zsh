@@ -184,6 +184,8 @@ function orbit-update {
 alias orbit-offload="orbit offload-all"
 alias orbit-offload-all="orbit offload-all"
 alias orbit-rollback="orbit rollback"
+alias orbit-restore="orbit restore-all"
+alias orbit-restore-all="orbit restore-all"
 alias orbit-android="orbit android-offload"
 alias orbit-gradle="orbit gradle-offload"
 alias orbit-cursor="orbit cursor-offload"
