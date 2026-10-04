@@ -96,8 +96,13 @@ fi
 
 export PATH="$PNPM_HOME:$PATH"
 
+# Clear any pre-existing aliases to prevent "defining function based on alias" parse errors in Zsh
+unalias orbit 2>/dev/null || true
+unalias orbit-disk 2>/dev/null || true
+unalias orbit-update 2>/dev/null || true
+
 # Resilient Orbit CLI Wrapper (Auto-locates binary, fixes PATH, and auto-reloads session on update)
-orbit() {
+function orbit {
     # If updating: run update AND automatically reload ~/.zshrc into the current terminal session!
     if [ "$1" = "update" ] || [ "$1" = "upgrade" ]; then
         local ret=0
@@ -167,9 +172,15 @@ orbit() {
     return 127
 }
 
-# Aliases routing to the smart wrapper
-alias orbit-disk="orbit"
-alias orbit-update="orbit update"
+function orbit-disk {
+    orbit "$@"
+}
+
+function orbit-update {
+    orbit update "$@"
+}
+
+# Shortcuts routing to the smart wrapper
 alias orbit-sweep="orbit sweep"
 alias orbit-status="orbit status"
 alias orbit-stats="orbit stats"
